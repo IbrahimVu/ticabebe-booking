@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {slots,rangeFor,vnDate,addDays} from '../public/booking.mjs';
+import {slots,rangeFor,vnDate,addDays,formatDateVN} from '../public/booking.mjs';
 const settings={open_time:'09:00:00',close_time:'20:00:00',duration_minutes:45,buffer_minutes:15};
 const day='2030-01-07',now=new Date('2030-01-06T00:00:00Z');
+test('hiển thị ngày Việt Nam DD/MM/YYYY, giữ nguyên giá trị ISO dùng đặt lịch',()=>{assert.equal(formatDateVN('2026-03-04'),'04/03/2026');assert.equal(formatDateVN('2028-02-29'),'29/02/2028');assert.equal(formatDateVN(''),'');});
 const busy=[{starts_at:`${day}T15:00:00+07:00`,blocked_until:`${day}T16:00:00+07:00`}];
 test('45 phút cắt + 15 phút nghỉ: 15:00 đã đặt thì 16:00 còn trống',()=>{
   const result=slots(settings,busy,day,now);

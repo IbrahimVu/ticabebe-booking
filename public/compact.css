@@ -1,4 +1,14 @@
 /* Ưu tiên đặt lịch và xem lịch ngay trên màn hình đầu. */
+.vn-date-control { position: relative; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: #fafbf8; color: var(--green); font-size: 16px; font-variant-numeric: tabular-nums; }
+.vn-date-control input[type=date] { position: absolute; inset: 0; width: 100% !important; max-width: none !important; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+.vn-date-control input[type=date]::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: auto; height: auto; margin: 0; padding: 0; }
+.vn-date-control:focus-within { outline: 3px solid #c89b57; outline-offset: 2px; }
+.vn-date-control:has(input:disabled) { opacity: .55; }
+.vn-date-display,.vn-date-icon { pointer-events: none; }
+.vn-date-icon { font-size: 19px; line-height: 1; }
+.date-tools > .vn-date-control { width: 160px; flex-shrink: 0; }
+.period-nav > .vn-date-control { min-width: 0; flex: 1; }
+.field > .vn-date-control { margin-top: 5px; }
 .hero { display: block; max-width: 560px; margin: auto; }
 .hero .card-heading { margin-bottom: 0; }
 .hero .card-heading h2 { font-family: 'Be Vietnam Pro',system-ui,sans-serif; font-size: 22px; font-weight: 600; }

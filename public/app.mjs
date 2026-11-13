@@ -1,4 +1,4 @@
-import {slots,vnDate,addDays,rangeFor} from './booking.mjs';
+import {slots,vnDate,addDays,rangeFor,formatDateVN} from './booking.mjs';
 import {secureApiUrl,assertSecurePage,minimalSession,PRIVATE_FETCH,IDLE_TIMEOUT_MS} from './security.mjs';
 const cfg=Object.freeze({...window.APP_CONFIG}), configured=Boolean(cfg.supabaseUrl&&cfg.supabaseKey);
 const $=(s)=>document.querySelector(s), esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10,7 +10,22 @@ try{
   if(stored?.version===1&&Number.isFinite(stored.lastActive)&&Date.now()-stored.lastActive>=0&&Date.now()-stored.lastActive<IDLE_TIMEOUT_MS){session=minimalSession(stored.session);lastActive=stored.lastActive;}
   if(!session)sessionStorage.removeItem('ticabebe-session');
 }catch{}
-const dateLabel=(d,opts={weekday:'long',day:'numeric',month:'long'})=>new Intl.DateTimeFormat('vi-VN',opts).format(new Date(`${d}T12:00:00+07:00`));
+const dateLabel=(d,opts)=>!opts?formatDateVN(d):opts.month&&opts.year&&!opts.day?`${d.slice(5,7)}/${d.slice(0,4)}`:new Intl.DateTimeFormat('vi-VN',{...opts,timeZone:'Asia/Ho_Chi_Minh'}).format(new Date(`${d}T12:00:00+07:00`));
+function syncDateDisplays(root=document){
+  root.querySelectorAll('input[type="date"]').forEach(input=>{
+    let wrapper=input.parentElement;
+    if(!wrapper.classList.contains('vn-date-control')){
+      wrapper=document.createElement('span');wrapper.className='vn-date-control';
+      input.before(wrapper);wrapper.append(input);input.lang='vi-VN';
+      const display=document.createElement('span');display.className='vn-date-display';display.setAttribute('aria-hidden','true');wrapper.append(display);
+      const icon=document.createElement('span');icon.className='vn-date-icon';icon.setAttribute('aria-hidden','true');icon.textContent='▦';wrapper.append(icon);
+      const update=()=>{display.textContent=formatDateVN(input.value)||'DD/MM/YYYY';};
+      input.addEventListener('input',update);input.addEventListener('change',update);
+      input.addEventListener('click',()=>{try{input.showPicker?.();}catch{}});
+    }
+    wrapper.querySelector('.vn-date-display').textContent=formatDateVN(input.value)||'DD/MM/YYYY';
+  });
+}
 const timeLabel=(t)=>new Intl.DateTimeFormat('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date(t));
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',4000);}
 function persistSession(){try{if(session)sessionStorage.setItem('ticabebe-session',JSON.stringify({version:1,session,lastActive}));else sessionStorage.removeItem('ticabebe-session');lastStored=Date.now();}catch{}}
@@ -46,7 +61,7 @@ function closed(date){return settings.closed_days.includes(new Date(`${date}T12:
 function slotMarkup(){const available=closed(day)?[]:slots(settings,busy,day);if(!available.includes(selected))selected='';return available.length?available.map(t=>`<button class="slot ${selected===t?'active':''}" type="button" data-slot="${t}" aria-pressed="${selected===t}">${t}</button>`).join(''):`<p class="empty">${closed(day)?'Tiệm nghỉ ngày này. Hẹn bạn vào ngày khác nhé.':'Hôm nay đã hết giờ trống. Bạn hãy chọn ngày khác nhé.'}</p>`;}
 function updateSlots(){if(!$('#slots'))return;$('#slots').innerHTML=slotMarkup();$('#chosen').textContent=selected?`Đã chọn ${selected}`:'Chỉ hiển thị các giờ còn trống';$('#confirm').disabled=!configured||!selected||bookingPending;}
 async function refreshAvailability(){const date=day,gen=generation;if(!configured){updateSlots();return;}try{const result=await rpc('availability',{p_day:date});if(date!==day||gen!==generation)return;busy=result;updateSlots();$('#slot-error').textContent='';}catch(e){if(gen!==generation||!$('#slot-error'))return;$('#slot-error').textContent=e.message;$('#slots').innerHTML='';$('#confirm').disabled=true;}}
-function drawDates(){const today=vnDate();const start=day>addDays(today,6)?day:today;$('#date-strip').innerHTML=Array.from({length:7},(_,i)=>addDays(start,i)).filter(d=>d<=maxDay()).map(d=>`<button type="button" class="date-option ${day===d?'active':''}" data-day="${d}" aria-label="${dateLabel(d)}" aria-pressed="${day===d}">${d===today?'Hôm nay':dateLabel(d,{weekday:'short'})}<b>${Number(d.slice(8))}</b></button>`).join('');}
+function drawDates(){const today=vnDate();const start=day>addDays(today,6)?day:today;$('#date-strip').innerHTML=Array.from({length:7},(_,i)=>addDays(start,i)).filter(d=>d<=maxDay()).map(d=>`<button type="button" class="date-option ${day===d?'active':''}" data-day="${d}" aria-label="${dateLabel(d)}" aria-pressed="${day===d}">${d===today?'Hôm nay':dateLabel(d,{weekday:'short'})}<b>${Number(d.slice(8))}</b></button>`).join('');const monthLabel=$('#booking-form .date-tools > span:first-child');if(monthLabel)monthLabel.textContent=dateLabel(day,{month:'2-digit',year:'numeric'});syncDateDisplays();}
 async function booking(){await loadSettings();if(day<vnDate()||day>maxDay())day=vnDate();$('#app').innerHTML=`${!configured?'<div class="notice"><b>Chưa kết nối dữ liệu.</b> Giao diện đã sẵn sàng. Để nhận lịch thật, hãy làm theo README và điền Supabase URL + publishable key trong public/config.js.</div>':''}<div class="hero"><section class="card"><div class="card-heading"><h2>Đặt lịch cắt tóc</h2><span class="badge">✦ Cắt tóc · ${settings.duration_minutes} phút</span></div><form id="booking-form"><span class="step-label">Chọn ngày</span><div class="date-tools"><span>${dateLabel(day,{month:'long',year:'numeric'})}</span><input id="date" aria-label="Chọn ngày cắt tóc" type="date" min="${vnDate()}" max="${maxDay()}" value="${day}" required></div><div class="date-strip" id="date-strip"></div><span class="step-label">Chọn giờ trống</span><div class="slots" id="slots" aria-live="polite"><p class="empty">Đang tải giờ trống…</p></div><p id="slot-error" class="error" role="alert"></p><div class="availability"><span class="dot"></span><span id="chosen">Chỉ hiển thị các giờ còn trống</span></div><span class="step-label">Thông tin của bạn</span><div class="fields"><label class="field">Tên của bạn<input name="name" autocomplete="name" placeholder="Nguyễn Minh Anh" minlength="2" maxlength="80" required></label><label class="field">Số điện thoại<input name="phone" type="tel" autocomplete="tel" placeholder="09xx xxx xxx" pattern="[+0-9 ().-]{9,20}" maxlength="20" required></label></div><p class="error" id="booking-error" role="alert"></p><button class="primary full" id="confirm" disabled><span>Xác nhận đặt lịch</span><span aria-hidden="true">↗</span></button><p class="fineprint">Thông tin của bạn chỉ được dùng để quản lý cuộc hẹn.</p></form></section></div>`;drawDates();await refreshAvailability();
   $('#date').onchange=async e=>{if(!e.target.value||e.target.value<vnDate()||e.target.value>maxDay())return;day=e.target.value;selected='';drawDates();await refreshAvailability();};
   $('#date-strip').onclick=async e=>{const b=e.target.closest('[data-day]');if(!b)return;day=b.dataset.day;selected='';$('#date').value=day;drawDates();await refreshAvailability();};
@@ -75,6 +90,7 @@ function login(){
 async function loadAppointments(){const [from,to]=rangeFor(adminDay,view);const result=[];let offset=0;for(;;){const rows=await request(`/rest/v1/appointments?select=*&starts_at=gte.${encodeURIComponent(from+'T00:00:00+07:00')}&starts_at=lt.${encodeURIComponent(to+'T00:00:00+07:00')}&order=starts_at.asc,id.asc&limit=500&offset=${offset}`,{auth:true});result.push(...rows);if(rows.length<500)break;offset+=500;}appointments=result;}
 function row(a){return `<div class="appointment"><time><b>${timeLabel(a.starts_at)}</b><span>${timeLabel(a.ends_at)}</span></time><div><b>${esc(a.customer_name)}</b><small>${a.status==='cancelled'?'Đã hủy':'Đã xác nhận'}</small></div><a class="phone" href="tel:${esc(a.phone.replace(/[^+\d]/g,''))}">${esc(a.phone)}</a><button class="secondary" data-edit="${a.id}">Chi tiết ↗</button></div>`;}
 function drawAppointments(){const active=appointments.filter(a=>a.status==='confirmed');$('#stats').innerHTML=`<div class="stat">Lịch hẹn<strong>${active.length}</strong></div><div class="stat">Thời gian<strong>${active.reduce((s,a)=>s+(Date.parse(a.ends_at)-Date.parse(a.starts_at))/60000,0)} <small>phút</small></strong></div><div class="stat">Đã hủy<strong>${appointments.length-active.length}</strong></div>`;
+  syncDateDisplays();
   if(view==='month'){
     if(monthDay.slice(0,7)!==adminDay.slice(0,7))monthDay=adminDay;
     const first=adminDay.slice(0,7)+'-01',offset=(new Date(`${first}T12:00:00+07:00`).getUTCDay()+6)%7,start=addDays(first,-offset);
@@ -108,7 +124,7 @@ function edit(a){
   let changing=false,picked='',available=[],loading=false,saving=false,version=0;
   const initialDay=originalDay>=vnDate()&&originalDay<=maxDay()?originalDay:vnDate();
   dialog.innerHTML=`<div class="edit-heading"><div><h2 id="edit-title">Chỉnh sửa lịch hẹn</h2><p class="muted">#${esc(a.id.slice(0,8).toUpperCase())} · ${a.status==='cancelled'?'Đã hủy':'Đã xác nhận'}</p></div><button type="button" class="secondary icon-button" id="close-dialog" aria-label="Đóng chỉnh sửa">✕</button></div><form id="edit-form"><div class="fields"><label class="field">Tên khách<input name="name" autocomplete="name" value="${esc(a.customer_name)}" minlength="2" maxlength="80" required></label><label class="field">Số điện thoại<input name="phone" value="${esc(a.phone)}" type="tel" autocomplete="tel" pattern="[+0-9 ().-]{9,20}" required></label></div><div class="current-appointment"><span>Lịch hẹn hiện tại</span><strong>${dateLabel(originalDay)}</strong><b>${timeLabel(a.starts_at)} – ${timeLabel(a.ends_at)}</b></div>${a.status==='confirmed'?`<button type="button" class="secondary change-time" id="change-time" aria-expanded="false" aria-controls="reschedule">Đổi ngày / giờ hẹn</button><section id="reschedule" hidden><label class="field">Chọn ngày mới<input id="edit-day" name="day" type="date" min="${vnDate()}" max="${maxDay()}" value="${initialDay}" disabled></label><span class="step-label">Chọn giờ còn trống</span><p class="muted edit-hint">${settings.duration_minutes} phút cắt + ${settings.buffer_minutes} phút nghỉ. Chọn một giờ còn trống.</p><div id="edit-slots" class="slots" aria-label="Giờ trống để dời lịch" aria-live="polite"></div><p id="edit-chosen" class="availability" role="status">Chưa chọn giờ mới</p></section>`:''}<p class="error" id="edit-error" role="alert"></p><div class="dialog-actions">${a.status==='confirmed'?'<button type="button" class="secondary danger" id="cancel">Hủy lịch</button><button class="primary" id="save-edit">Lưu thay đổi</button>':'<span class="muted">Lịch đã hủy. Khách có thể đặt lịch mới.</span>'}</div></form>`;
-  dialog.setAttribute('aria-labelledby','edit-title');dialog.showModal();
+  syncDateDisplays(dialog);dialog.setAttribute('aria-labelledby','edit-title');dialog.showModal();
   // Tránh tự bật bàn phím khi mở bảng sửa trên điện thoại.
   $('#close-dialog').focus({preventScroll:true});
   $('#close-dialog').onclick=()=>dialog.close();

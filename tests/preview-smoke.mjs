@@ -4,7 +4,7 @@ import {mkdir} from 'node:fs/promises';
 import {addDays,vnDate} from '../public/booking.mjs';
 let browser;
 try{browser=await chromium.launch({headless:true});}catch{browser=await chromium.launch({channel:'msedge',headless:true});}
-const context=await browser.newContext({offline:true,viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+const context=await browser.newContext({offline:true,locale:'en-US',viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const page=await context.newPage(),errors=[],requests=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('request',r=>{if(r.url().startsWith('http'))requests.push(r.url());});
@@ -14,6 +14,8 @@ try {
   await page.locator('#date').waitFor();
   assert.ok((await page.locator('#slots').boundingBox()).y<440,'Khách thấy bộ chọn giờ ngay trên màn hình đầu');
   await page.locator('#date').fill(tomorrow);await page.locator('#date').dispatchEvent('change');
+  assert.equal(await page.locator('#date').inputValue(),tomorrow);
+  assert.equal(await page.locator('#date + .vn-date-display').textContent(),tomorrow.split('-').reverse().join('/'));
   await page.locator('#slots .slot').first().waitFor();
   assert.equal(await page.getByRole('button',{name:'15:00',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'15:45',exact:true}).count(),0);
@@ -27,6 +29,7 @@ try {
   assert.equal(await page.getByRole('button',{name:'13:00',exact:true}).count(),1);
   await page.getByRole('link',{name:'Quản trị'}).click();await page.locator('[name=id]').fill('admin');await page.locator('[name=password]').fill('admin123');await page.locator('#login button').click();await page.locator('#admin-date').waitFor();
   await page.locator('#admin-date').fill(tomorrow);await page.locator('#admin-date').dispatchEvent('change');
+  await page.locator('#admin-date + .vn-date-display').filter({hasText:tomorrow.split('-').reverse().join('/')}).waitFor();
   assert.ok((await page.locator('#appointments').boundingBox()).y<400,'Danh sách lịch admin không bị các section phụ đẩy xuống');
   const row=()=>page.locator('.appointment').filter({hasText:'Khách xem thử'});
   await row().getByRole('button').click();
