@@ -1,0 +1,105 @@
+/* Ưu tiên đặt lịch và xem lịch ngay trên màn hình đầu. */
+.hero { display: block; max-width: 560px; margin: auto; }
+.hero .card-heading { margin-bottom: 0; }
+.hero .card-heading h2 { font-family: 'Be Vietnam Pro',system-ui,sans-serif; font-size: 22px; font-weight: 600; }
+.appointment time b, .appointment time span { display: block; }
+.appointment time span { margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.admin-top h1 { font-family: 'Be Vietnam Pro',system-ui,sans-serif; font-size: 28px; font-weight: 600; margin: 0; }
+.admin-actions { display: flex; gap: 8px; align-items: center; }
+.admin-menu { position: relative; }
+.admin-menu summary { min-width: 44px; min-height: 44px; display: grid; place-items: center; list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 6px; background: white; font-size: 24px; }
+summary::-webkit-details-marker { display: none; }
+.admin-menu > div { position: absolute; top: calc(100% + 6px); right: 0; z-index: 6; background: white; padding: 6px; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px #173b3120; }
+.admin-menu button { white-space: nowrap; }
+.stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+.stat { display: flex; flex-direction: row-reverse; gap: 5px; align-items: baseline; padding: 0; border: 0; background: none; border-radius: 0; font-size: 12px; }
+.stat strong { display: inline; margin: 0; font-size: 16px; }
+.stat strong small { font-size: 11px; }
+.period-nav { display: flex; gap: 8px; align-items: center; }
+.period-nav input { flex: 1; min-width: 0; }
+.settings { margin: auto; }
+.settings .edit-heading h2 { font-size: 23px; }
+.settings-note { font-size: 12px; margin: 12px 0 16px; }
+.settings .fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.settings .fields > label:first-child, .settings .fields > label:last-child { grid-column: 1 / -1; }
+@media (max-width: 900px) { main { max-width: 680px; } }
+@media (max-width: 650px) {
+  header { padding: 2px 12px; padding-top: max(2px,env(safe-area-inset-top)); }
+  header .brand { font-size: 19px; min-height: 44px; }
+  .brand-icon { font-size: 27px; }
+  nav a { min-height: 44px; padding: 10px 8px; }
+  main { padding: 12px 12px 16px; min-height: 0; }
+  .card { padding: 16px 12px; border-radius: 10px; }
+  .hero .card-heading h2 { font-size: 21px; }
+  .hero .badge { font-size: 10px; padding: 6px 8px; }
+  .step-label { margin: 14px 0 8px; font-size: 13px; }
+  .date-tools { margin-bottom: 6px; font-size: 11px; }
+  input, select, input[type=date] { min-height: 44px; padding: 10px; }
+  .date-strip { gap: 6px; padding-bottom: 4px; }
+  .date-option { min-height: 60px; padding: 6px 0; line-height: 1.4; font-size: 10px; }
+  .date-option b { margin: 2px 0; font-size: 20px; }
+  .slots { gap: 6px; }
+  .slot { min-height: 44px; padding: 10px 2px; font-size: 14px; border-radius: 6px; }
+  #slots { max-height: 202px; padding: 2px; }
+  .availability { margin: 6px 0 0; font-size: 11px; }
+  #booking-form .availability::after { display: none; }
+  .fields { gap: 10px; }
+  label.field { font-size: 12px; }
+  label.field input, label.field select { margin-top: 5px; }
+  .error:empty { display: none; }
+  .error { margin: 8px 0; }
+  .fineprint { font-size: 10px; line-height: 1.5; margin-top: 8px; }
+  .full { margin-top: 12px; min-height: 46px; }
+  .primary, .secondary, .segments button, .link-button { min-height: 44px; }
+  .admin-top h1 { font-size: 23px; }
+  .admin-actions { gap: 6px; }
+  #open-settings { padding: 8px 12px; font-size: 12px; }
+  .stat-row { gap: 12px; margin: 10px 0 12px; flex-wrap: nowrap; justify-content: space-between; }
+  .stat { font-size: 11px; gap: 4px; white-space: nowrap; }
+  .stat strong { font-size: 15px; }
+  .stat strong small { font-size: 10px; }
+  .toolbar { grid-template-columns: minmax(0,1fr) 58px 44px; gap: 6px; margin: 0 0 12px; }
+  .segments { grid-column: 1; grid-row: 1; gap: 2px; padding: 3px; }
+  .segments button { font-size: 12px; padding: 7px 3px; min-height: 38px; }
+  #today { grid-column: 2; grid-row: 1; font-size: 10px; white-space: nowrap; }
+  #reload { grid-column: 3; grid-row: 1; }
+  .period-nav { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 6px; }
+  .period-nav button { padding: 8px; }
+  #admin-date { min-height: 44px; }
+  .day-group { margin: 12px 0; }
+  .day-group h3 { font-size: 13px; margin-bottom: 8px; }
+  .appointment { grid-template-columns: 56px minmax(0,1fr) 72px; grid-template-rows: auto auto; gap: 0 8px; padding: 10px; margin-bottom: 6px; border-radius: 8px; }
+  .appointment time { grid-column: 1; grid-row: 1 / 3; align-self: start; padding-top: 2px; font-size: 15px; }
+  .appointment time span { font-size: 11px; margin-top: 5px; }
+  .appointment > div { grid-column: 2; grid-row: 1; font-size: 13px; }
+  .appointment small { font-size: 10px; margin-top: 3px; }
+  .appointment .phone { grid-column: 2; grid-row: 2; font-size: 12px; min-height: 32px; }
+  .appointment button { grid-column: 3; grid-row: 1 / 3; padding: 8px 4px; font-size: 11px; }
+  .calendar-hint { font-size: 11px; margin: 0 0 6px; }
+  .month-grid { margin-top: 6px; }
+  .calendar-head { padding: 7px 0; font-size: 11px; }
+  .calendar-day { min-height: 48px; gap: 2px; padding: 4px 0; font-size: 13px; }
+  .calendar-day small { font-size: 9px; min-height: 11px; }
+  .empty { padding: 12px 8px; margin: 0; }
+  .edit-heading { padding: 12px 12px 0; }
+  .edit-heading h2 { font-size: 21px; margin: 0 0 4px; }
+  .edit-heading p { font-size: 11px; margin-bottom: 10px; }
+  .icon-button { flex-basis: 44px; }
+  #edit-form { padding: 12px 12px max(12px,env(safe-area-inset-bottom)); }
+  dialog .fields { margin-bottom: 12px; }
+  .current-appointment { grid-template-columns: 1fr auto; gap: 5px 8px; padding: 10px 12px; font-size: 12px; }
+  .current-appointment span { grid-column: 1 / -1; font-size: 10px; }
+  .change-time { min-height: 44px; margin: 10px 0 12px; font-size: 13px; }
+  .edit-hint { font-size: 11px; margin-bottom: 8px; }
+  #edit-slots { max-height: 196px; }
+  .dialog-actions { margin-top: 12px; padding-top: 10px; }
+  .settings { margin: auto auto 0; padding: 0; }
+  .settings .edit-heading h2 { font-size: 21px; }
+  .settings-note { margin: 10px 12px; font-size: 11px; }
+  #settings { padding: 0 12px max(12px,env(safe-area-inset-bottom)); }
+  .settings .fields { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .settings #settings > button { width: 100%; }
+  .login { margin: 0 auto; }
+  footer { margin: 0 12px; padding: 12px 0 max(12px,env(safe-area-inset-bottom)); font-size: 9px; }
+}
+@media (min-width: 360px) and (max-width: 650px) { #edit-form > .fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
