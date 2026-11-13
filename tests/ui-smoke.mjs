@@ -16,8 +16,8 @@ try{
   await page.goto(base);await page.locator('#booking-form').waitFor();
   assert.ok(await page.locator('#confirm').isDisabled());
   await page.screenshot({path:new URL('../test-results/unconfigured.png',import.meta.url).pathname.replace(/^\/(.:)/,'$1'),fullPage:true});
-  await page.route('**/config.js',r=>r.fulfill({contentType:'text/javascript',body:`window.APP_CONFIG=${JSON.stringify({supabaseUrl:'https://test.example',supabaseKey:'sb_publishable_test',adminId:'admin',adminEmail:'owner@example.com'})}`}));
-  await page.route('https://test.example/**',async r=>{
+  await page.route('**/config.js',r=>r.fulfill({contentType:'text/javascript',body:`window.APP_CONFIG=${JSON.stringify({supabaseUrl:'https://ulhipapekijwwhylsafq.supabase.co',supabaseKey:'sb_publishable_test',adminId:'admin',adminEmail:'owner@example.com'})}`}));
+  await page.route('https://ulhipapekijwwhylsafq.supabase.co/**',async r=>{
     const req=r.request(),u=new URL(req.url()),data=req.postDataJSON();
     let body=null,status=200;
     if(u.pathname.endsWith('/settings'))body=[settings];
@@ -51,5 +51,11 @@ try{
   await page.locator('#open-settings').click();await page.locator('#settings [name=duration_minutes]').fill('60');await page.getByRole('button',{name:'Lưu cấu hình'}).click();await page.getByText('Đã lưu cấu hình lịch cắt.',{exact:true}).waitFor();assert.equal(settings.duration_minutes,60);
   await page.locator('#month-details [data-edit]').click();page.once('dialog',d=>d.accept());await page.locator('#cancel').click();await page.getByText('Đã hủy lịch hẹn.',{exact:true}).waitFor();assert.equal(bookings[0].status,'cancelled');
   await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:new URL('../test-results/admin-mobile.png',import.meta.url).pathname.replace(/^\/(.:)/,'$1'),fullPage:true});
+  assert.equal(await page.evaluate(()=>{window.__inlineSecurityTest=false;const script=document.createElement('script');script.textContent='window.__inlineSecurityTest=true';document.head.append(script);return window.__inlineSecurityTest;}),false,'CSP phải chặn script inline');
+  let unexpectedConnection=false;
+  await page.route('https://blocked.example/**',r=>{unexpectedConnection=true;return r.fulfill({status:200,body:'unexpected'});});
+  assert.equal(await page.evaluate(()=>fetch('https://blocked.example/collect',{method:'POST',body:'test-only'}).then(()=>true).catch(()=>false)),false);
+  assert.equal(unexpectedConnection,false,'CSP phải chặn request trước khi ra mạng');
+  const storedSession=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('ticabebe-session')));assert.equal(storedSession.version,1);assert.deepEqual(Object.keys(storedSession.session).sort(),['access_token','expires_at','refresh_token']);await page.evaluate(()=>{const key='ticabebe-session',r=JSON.parse(sessionStorage.getItem(key));r.lastActive=Date.now()-31*60*1000;sessionStorage.setItem(key,JSON.stringify(r));});await page.reload();await page.locator('#login').waitFor();assert.equal(await page.evaluate(()=>sessionStorage.getItem('ticabebe-session')),null);
   assert.deepEqual(errors,[]);console.log('PASS: giao diện máy tính/điện thoại, báo trùng giờ, xác nhận, giờ trống, đăng nhập admin, ngày/tuần/tháng, sửa/hủy và cấu hình.');
 }finally{await browser.close();}

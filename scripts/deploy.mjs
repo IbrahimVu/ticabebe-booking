@@ -19,7 +19,7 @@ const tests=(await readdir(new URL('../tests/',import.meta.url))).filter(name=>n
 run(process.execPath,['--test',...tests]);
 run(process.execPath,['scripts/sync-pages.mjs']);
 run('git',['diff','--check']);
-run('git',['add','--','.gitignore','AGENTS.md','README.md','docs','package.json','pnpm-lock.yaml','public','scripts','supabase','tests','.github','app.mjs','booking.mjs','compact.css','config.js','index.html','mobile.css','style.css','schema.sql']);
+run('git',['add','--','.gitignore','AGENTS.md','README.md','docs','package.json','pnpm-lock.yaml','public','scripts','supabase','tests','.github','app.mjs','booking.mjs','security.mjs','compact.css','config.js','index.html','mobile.css','style.css','schema.sql']);
 const changed=run('git',['diff','--cached','--quiet'],{allowed:[0,1]});
 if(changed===1)run('git',['commit','-m',message]);
 run('git',['push','origin','main']);
