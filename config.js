@@ -3,5 +3,5 @@ window.APP_CONFIG = {
   supabaseUrl: 'https://ulhipapekijwwhylsafq.supabase.co',
   supabaseKey: 'sb_publishable_qjMfOoTiYIH_MEEAwGWGOg_rnpHzUkz',
   adminId: 'admin',
-  adminEmail: ''
+  adminEmail: 'tica@gmail.com'
 };
