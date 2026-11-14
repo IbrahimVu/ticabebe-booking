@@ -39,12 +39,12 @@ GitHub Pages phục vụ HTML/CSS/JavaScript, không tự có cơ sở dữ li�
 4. Đánh dấu tài khoản vừa tạo là admin: mở **SQL Editor**, chạy câu lệnh sau sau khi thay email:
 
 ```sql
-insert into public.admin_users(user_id)
+insert into booking_private.admin_users(user_id)
 select id from auth.users where lower(email) = lower('EMAIL_CUA_BAN@example.com')
 on conflict do nothing;
 
 -- Kết quả phải có đúng tài khoản admin bạn vừa cấp quyền.
-select u.email from auth.users u join public.admin_users a on a.user_id=u.id;
+select u.email from auth.users u join booking_private.admin_users a on a.user_id=u.id;
 ```
 
 5. Trong **Authentication → Providers / Sign In**, giữ đăng nhập Email/Password được bật. Có thể tắt **Allow new users to sign up** vì chỉ admin cần đăng nhập. Các tài khoản không có trong bảng `admin_users` không có quyền đọc lịch dù đăng nhập được.

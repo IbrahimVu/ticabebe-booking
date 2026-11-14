@@ -51,22 +51,20 @@ async function previewRequest(path,{body,auth=false}={}) {
   if(path.startsWith('/rest/v1/settings?')) return [s];
   if(path.endsWith('/require_admin')) {previewAdmin();return true;}
   if(path.endsWith('/availability')) return data.appointments.filter(a=>a.status==='confirmed' && Date.parse(a.starts_at)<Date.parse(`${addDays(body.p_day,1)}T00:00:00+07:00`) && Date.parse(a.blocked_until)>Date.parse(`${body.p_day}T00:00:00+07:00`)).map(({starts_at,blocked_until})=>({starts_at,blocked_until}));
-  if(path.startsWith('/rest/v1/appointments?')) {
+  if(path.endsWith('/admin_availability')) {
+    previewAdmin();return data.appointments.filter(a=>a.id!==body.p_exclude&&a.status==='confirmed'&&Date.parse(a.starts_at)<Date.parse(`${addDays(body.p_day,1)}T00:00:00+07:00`)&&Date.parse(a.blocked_until)>Date.parse(`${body.p_day}T00:00:00+07:00`)).map(({starts_at,blocked_until})=>({starts_at,blocked_until}));
+  }
+  if(path.endsWith('/admin_appointments')) {
     previewAdmin();
-    const params=new URLSearchParams(path.split('?')[1]);
-    const filters=params.getAll('starts_at');
-    const lower=filters.find(x=>x.startsWith('gte.')),upper=filters.find(x=>x.startsWith('lt.'));
-    const from=lower?Date.parse(lower.slice(4)):-Infinity,to=upper?Date.parse(upper.slice(3)):Infinity;
-    const blockedAfter=params.get('blocked_until'),exclude=params.get('id')?.replace(/^neq\./,'');
-    const offset=Number(params.get('offset')||0),limit=Number(params.get('limit')||500);
-    return data.appointments.filter(a=>a.id!==exclude && (!params.has('status')||a.status==='confirmed') && Date.parse(a.starts_at)>=from && Date.parse(a.starts_at)<to && (!blockedAfter||Date.parse(a.blocked_until)>Date.parse(blockedAfter.slice(3)))).sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).slice(offset,offset+limit);
+    const from=Date.parse(`${body.p_from}T00:00:00+07:00`),to=Date.parse(`${body.p_to}T00:00:00+07:00`);
+    return data.appointments.filter(a=>Date.parse(a.starts_at)>=from&&Date.parse(a.starts_at)<to).sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).slice(body.p_offset,body.p_offset+body.p_limit);
   }
   if(path.endsWith('/book_appointment')) {
     validatePreviewPerson(body.p_name,body.p_phone);
     const start=Date.parse(body.p_start);
     validatePreviewSlot(start,s,data.appointments);
     const a={id:crypto.randomUUID(),customer_name:body.p_name,phone:body.p_phone,starts_at:new Date(start).toISOString(),ends_at:new Date(start+s.duration_minutes*60000).toISOString(),blocked_until:new Date(start+(s.duration_minutes+s.buffer_minutes)*60000).toISOString(),status:'confirmed'};
-    data.appointments.push(a);writePreview(data);return a;
+    data.appointments.push(a);writePreview(data);return {id:a.id,starts_at:a.starts_at,ends_at:a.ends_at};
   }
   if(path.endsWith('/edit_appointment')) {
     previewAdmin();const a=data.appointments.find(a=>a.id===body.p_id);

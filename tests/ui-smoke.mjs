@@ -24,10 +24,11 @@ try{
     else if(u.pathname.endsWith('/availability'))body=bookings.filter(a=>a.status==='confirmed').map(({starts_at,blocked_until})=>({starts_at,blocked_until}));
     else if(u.pathname.endsWith('/book_appointment')){
       if(rejectNext){rejectNext=false;status=400;body={message:'SLOT_TAKEN'};}
-      else{const start=Date.parse(data.p_start);const a={id:'11111111-1111-1111-1111-111111111111',customer_name:data.p_name,phone:data.p_phone,starts_at:new Date(start).toISOString(),ends_at:new Date(start+45*60000).toISOString(),blocked_until:new Date(start+60*60000).toISOString(),status:'confirmed'};bookings.push(a);body=a;}
+      else{const start=Date.parse(data.p_start);const a={id:'11111111-1111-1111-1111-111111111111',customer_name:data.p_name,phone:data.p_phone,starts_at:new Date(start).toISOString(),ends_at:new Date(start+45*60000).toISOString(),blocked_until:new Date(start+60*60000).toISOString(),status:'confirmed'};bookings.push(a);body={id:a.id,starts_at:a.starts_at,ends_at:a.ends_at};}
     }else if(u.pathname.endsWith('/token'))body={access_token:'test-token',refresh_token:'refresh',expires_at:Math.floor(Date.now()/1000)+3600};
     else if(u.pathname.endsWith('/require_admin'))body=true;
-    else if(u.pathname.endsWith('/appointments'))body=bookings.filter(a=>a.id!==u.searchParams.get('id')?.replace(/^neq\./,''));
+    else if(u.pathname.endsWith('/admin_appointments'))body=bookings;
+    else if(u.pathname.endsWith('/admin_availability'))body=bookings.filter(a=>a.id!==data.p_exclude&&a.status==='confirmed').map(({starts_at,blocked_until})=>({starts_at,blocked_until}));
     else if(u.pathname.endsWith('/edit_appointment')){const a=bookings.find(a=>a.id===data.p_id);a.customer_name=data.p_name;a.phone=data.p_phone;if(data.p_cancel)a.status='cancelled';else{a.starts_at=data.p_start;a.ends_at=new Date(Date.parse(data.p_start)+45*60000).toISOString();a.blocked_until=new Date(Date.parse(data.p_start)+60*60000).toISOString();}}
     else if(u.pathname.endsWith('/update_settings'))settings={...settings,duration_minutes:data.p_duration,buffer_minutes:data.p_buffer};
     else if(u.pathname.endsWith('/logout'))body=null;

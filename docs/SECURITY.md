@@ -8,7 +8,8 @@ Người dùng đã chọn **HTTPS/TLS + siết bảo mật**. Đăng nhập dù
 - Fetch dùng `cache: no-store`, `redirect: error`, `credentials: omit`, `referrerPolicy: no-referrer`. Email và mật khẩu không được gắn vào URL. Refresh token cũng chỉ gửi qua HTTPS đến đúng project.
 - CSP trong `public/index.html` chỉ cho script cùng origin và kết nối đúng Supabase. Script inline không được phép; không cho form tự submit khi JavaScript lỗi, không cho nhúng object/frame hoặc thay base URL. CSS inline được giữ để tương thích giao diện hiện tại. Font chỉ dùng Google Fonts. Referrer bị tắt.
 - Chỉ lưu access token, refresh token và hạn dùng trong `sessionStorage` của tab, không lưu response người dùng, email hay mật khẩu vào phiên. Ô mật khẩu được xóa sau khi gửi. Sau 30 phút không tương tác, xóa phiên và đăng xuất giao diện. Phiên cũ không đúng định dạng mới bị xóa.
-- Quyền PostgreSQL và RLS giới hạn đọc tên/số điện thoại ở admin. Các RPC quản trị kiểm tra `require_admin()`. Khách chỉ xem giờ bận và tạo lịch bằng RPC, không đọc được bảng lịch hoặc danh sách admin.
+- Bảng lịch hẹn và danh sách admin nằm trong schema `booking_private`, không mở qua Data API; cả `anon` và `authenticated` đều không có quyền đọc trực tiếp. RLS vẫn được giữ. Admin đọc lịch qua `admin_appointments` và chọn giờ sửa qua `admin_availability`; cả hai kiểm tra `require_admin()` và giới hạn phạm vi truy vấn.
+- API đặt lịch chỉ trả mã lịch, giờ bắt đầu và kết thúc. Tên/số điện thoại trên xác nhận lấy từ chính biểu mẫu vừa gửi. API công khai xem giờ bận chỉ trả thời gian, không có mã lịch hay thông tin khách; biết mã lịch không cấp quyền tra cứu. Lỗi dữ liệu đầu vào/trùng lịch không trả chi tiết bản ghi khách.
 - SQL dùng tham số, không ghép câu lệnh từ dữ liệu khách. Nội dung tên/số điện thoại được escape trước khi hiển thị HTML. Ràng buộc PostgreSQL chặn trùng lịch ngay tại DB.
 - Git dùng Git Credential Manager trên máy. Không đưa credential Git, mật khẩu Supabase, service-role key hoặc secret key vào repository. Publishable key là cấu hình công khai; email admin đã được chủ tài khoản đồng ý công khai để ánh xạ ID `admin`.
 
@@ -26,6 +27,6 @@ Khi đổi project Supabase, cập nhật đồng bộ `public/config.js`, `publ
 
 ## Xác minh
 
-`tests/security.test.mjs` kiểm tra HTTP, sai origin, URL/đường dẫn lạ, fetch options và dữ liệu phiên tối thiểu. `tests/database.test.mjs` kiểm tra quyền và ràng buộc dữ liệu trên PostgreSQL nhúng. `tests/ui-smoke.mjs` kiểm tra luồng đăng nhập và hết hạn phiên. Kiểm tra production bằng request đọc chỉ xác minh quyền anonymous, không tạo lịch thử trên dữ liệu thật.
+`tests/security.test.mjs` kiểm tra HTTP, sai origin, URL/đường dẫn lạ, fetch options và dữ liệu phiên tối thiểu. `tests/database.test.mjs` kiểm tra quyền và ràng buộc dữ liệu trên PostgreSQL nhúng. `tests/customer-privacy.test.mjs` kiểm tra nâng cấp giữ nguyên dữ liệu, chặn đọc trực tiếp và tài khoản không phải admin, response đặt lịch tối thiểu và lỗi không lộ thông tin. `tests/ui-smoke.mjs` kiểm tra luồng đăng nhập và hết hạn phiên. Kiểm tra production không tạo lịch thử trên dữ liệu thật.
 
 Tài liệu: [Supabase password security](https://supabase.com/docs/guides/auth/password-security), [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html), [OWASP TLS Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html).
