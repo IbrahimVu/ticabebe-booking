@@ -14,6 +14,7 @@ test('nhiều nhân sự: phân quyền, dịch vụ, giá và giữ dữ liệu
  const {rows:[{day}]}=await db.query(`select ((now() at time zone 'Asia/Ho_Chi_Minh')::date+1)::text as day`),stamp=t=>`${day}T${t}:00+07:00`;
  const old=(await db.query("select public.book_appointment('Lịch cũ','0901234567',$1::timestamptz) as r",[stamp('15:00')])).rows[0].r;
  await db.exec(await readFile(new URL('../supabase/migrations/20261121_01_team_services.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261121_02_security_hardening.sql',import.meta.url),'utf8'));
  const login=async uid=>{await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);};
  const rpc=async (name,args=[])=>{const {rows:[r]}=await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) as r`,args);return r.r;};
  const list=()=>db.query('select * from public.studio_appointments($1::date,$1::date+1)',[day]);

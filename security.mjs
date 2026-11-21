@@ -16,6 +16,10 @@ export function assertSecurePage(page){
   if(page.protocol!=='https:'&&!(page.protocol==='http:'&&local))throw new Error('Vui lòng mở website bằng HTTPS để bảo vệ thông tin đăng nhập.');
 }
 
+export function assertTopLevel(win){
+  if(win.top!==win.self)throw new Error('Vui lòng mở website trực tiếp, không qua khung nhúng.');
+}
+
 export function minimalSession(value,now=Math.floor(Date.now()/1000)){
   if(!value||typeof value.access_token!=='string'||!value.access_token)return null;
   const expires=Number.isFinite(value.expires_at)?value.expires_at:(Number.isFinite(value.expires_in)?now+value.expires_in:NaN);

@@ -4,6 +4,7 @@
 
 1. Xuất bản frontend mới trước. Khi database chưa nâng cấp, trang tiếp tục dùng luồng đặt lịch cũ.
 2. Trong Supabase SQL Editor, chạy toàn bộ `supabase/migrations/20261121_01_team_services.sql` **một lần** trên database đã có bản bảo mật `booking_private`. Với dự án mới, chạy `supabase/schema.sql` trước rồi migration này. Không chạy lại schema khởi tạo trên dữ liệu đang dùng.
+   Sau đó chạy `supabase/migrations/20261121_02_security_hardening.sql` để thu hẹp các API cũ và quyền mặc định. Migration bảo mật không thay đổi lịch/giá/tài khoản hiện có.
 3. Đăng nhập admin hiện có. Mở **Quản lý → Nhân sự**, đổi tên hiển thị của admin và thêm người thực hiện. Admin/quản lý cũng nhận dịch vụ được nếu bật **Hiện cho khách chọn đặt lịch**.
 4. Thêm dịch vụ trong tab **Dịch vụ**. Mỗi dịch vụ có thời lượng và thời gian nghỉ chung cho mọi người, bước 15 phút.
 5. Trong **Giá theo người**, chọn người + dịch vụ, điền giá VNĐ và bật nhận dịch vụ. Không có giá thì khách không thấy lựa chọn đó; giá 0 được hiểu là miễn phí. Giá cắt tóc cũ không được tự đoán.

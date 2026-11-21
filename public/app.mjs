@@ -1,11 +1,11 @@
 import {slots,vnDate,addDays,rangeFor,formatDateVN} from './booking.mjs';
-import {secureApiUrl,assertSecurePage,minimalSession,PRIVATE_FETCH,IDLE_TIMEOUT_MS} from './security.mjs';
+import {secureApiUrl,assertSecurePage,assertTopLevel,minimalSession,PRIVATE_FETCH,IDLE_TIMEOUT_MS} from './security.mjs';
 import {launchStudio} from './studio.mjs';
 const cfg=Object.freeze({...window.APP_CONFIG}), configured=Boolean(cfg.supabaseUrl&&cfg.supabaseKey);
 const $=(s)=>document.querySelector(s), esc=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let settings={shop_name:'TiCaBeBe',open_time:'09:00',close_time:'20:00',duration_minutes:45,buffer_minutes:15,closed_days:[],booking_days:30};
 let day=vnDate(), selected='', busy=[], session=null, view='day', adminDay=vnDate(), monthDay=vnDate(), appointments=[], timer, generation=0, bookingPending=false;
-let lastActive=Date.now(),lastStored=0,refreshPromise=null;
+let lastActive=Date.now(),lastStored=0,refreshPromise=null,sessionEpoch=0;
 try{
   const stored=JSON.parse(sessionStorage.getItem('ticabebe-session')||'null');
   if(stored?.version===1&&Number.isFinite(stored.lastActive)&&Date.now()-stored.lastActive>=0&&Date.now()-stored.lastActive<IDLE_TIMEOUT_MS){session=minimalSession(stored.session);lastActive=stored.lastActive;}
@@ -30,28 +30,53 @@ function syncDateDisplays(root=document){
 const timeLabel=(t)=>new Intl.DateTimeFormat('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date(t));
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';setTimeout(()=>$('#toast').style.display='none',4000);}
 function persistSession(){try{if(session)sessionStorage.setItem('ticabebe-session',JSON.stringify({version:1,session,lastActive}));else sessionStorage.removeItem('ticabebe-session');lastStored=Date.now();}catch{}}
-function saveSession(value){session=minimalSession(value);lastActive=Date.now();persistSession();}
-function touchSession(){lastActive=Date.now();if(session&&lastActive-lastStored>5000)persistSession();}
+function saveSession(value){sessionEpoch++;session=minimalSession(value);lastActive=Date.now();persistSession();}
+async function revokeSessionTokens(value){
+  if(!value?.access_token||!configured)return;
+  try{await fetch(secureApiUrl(cfg.supabaseUrl,'/auth/v1/logout?scope=local'),{...PRIVATE_FETCH,method:'POST',headers:{apikey:cfg.supabaseKey,Authorization:`Bearer ${value.access_token}`},signal:AbortSignal.timeout(10000)});}catch{}
+}
+function endLocalSession(message){
+  const previous=session;saveSession(null);appointments=[];generation++;
+  document.dispatchEvent(new Event('ticabebe:route'));clearInterval(timer);
+  if(location.hash==='#admin'){login();}
+  if(message)toast(message);return previous;
+}
+function logoutSession(){const previous=endLocalSession('Đã đăng xuất.');void revokeSessionTokens(previous);}
+function touchSession(){checkIdleSession();lastActive=Date.now();if(session&&lastActive-lastStored>5000)persistSession();}
 document.addEventListener('pointerdown',touchSession,{passive:true});document.addEventListener('keydown',touchSession);
-setInterval(()=>{if(session&&Date.now()-lastActive>=IDLE_TIMEOUT_MS){saveSession(null);if(location.hash==='#admin')route();toast('Đã đăng xuất sau 30 phút không hoạt động.');}},10000);
+function checkIdleSession(){if(session&&Date.now()-lastActive>=IDLE_TIMEOUT_MS){const previous=endLocalSession('Đã đăng xuất sau 30 phút không hoạt động.');void revokeSessionTokens(previous);}}
+setInterval(checkIdleSession,10000);
+window.addEventListener('pageshow',checkIdleSession);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkIdleSession();});
 async function request(path,{method='GET',body,auth=false}={}) {
   if(!configured)throw new Error('Ứng dụng chưa kết nối Supabase. Xem hướng dẫn cài đặt trong README.');
-  assertSecurePage(location);
+  assertTopLevel(window);assertSecurePage(location);
   const target=secureApiUrl(cfg.supabaseUrl,path);
+  checkIdleSession();
+  const epoch=sessionEpoch;
   if(auth&&!session)throw new Error('Vui lòng đăng nhập lại.');
   if(auth&&session?.expires_at<Date.now()/1000+60){
-    if(!session.refresh_token){saveSession(null);throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');}
-    if(!refreshPromise)refreshPromise=(async()=>{
-      const r=await fetch(secureApiUrl(cfg.supabaseUrl,'/auth/v1/token?grant_type=refresh_token'),{...PRIVATE_FETCH,method:'POST',headers:{apikey:cfg.supabaseKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});
-      if(!r.ok){saveSession(null);throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');}
-      saveSession(await r.json());
-    })().finally(()=>{refreshPromise=null;});
-    await refreshPromise;
+    if(!session.refresh_token){endLocalSession();throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');}
+    if(!refreshPromise||refreshPromise.epoch!==epoch){
+      const source=session.refresh_token,task={epoch,promise:null};
+      task.promise=(async()=>{
+        const r=await fetch(secureApiUrl(cfg.supabaseUrl,'/auth/v1/token?grant_type=refresh_token'),{...PRIVATE_FETCH,method:'POST',headers:{apikey:cfg.supabaseKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:source})});
+        const fresh=await r.json().catch(()=>null);
+        if(epoch!==sessionEpoch||!session){if(r.ok)void revokeSessionTokens(fresh);throw new Error('Phiên đã kết thúc. Vui lòng đăng nhập lại.');}
+        if(!r.ok||!minimalSession(fresh)){endLocalSession();throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');}
+        session=minimalSession(fresh);persistSession();
+      })().finally(()=>{if(refreshPromise===task)refreshPromise=null;});
+      refreshPromise=task;
+    }
+    await refreshPromise.promise;
+    checkIdleSession();
   }
+  if(auth&&(epoch!==sessionEpoch||!session))throw new Error('Phiên đã kết thúc. Vui lòng đăng nhập lại.');
   const token=auth?session?.access_token:(cfg.supabaseKey.startsWith('sb_publishable_')?null:cfg.supabaseKey);
   const r=await fetch(target,{...PRIVATE_FETCH,method,headers:{apikey:cfg.supabaseKey,...(token?{Authorization:`Bearer ${token}`} : {}),'Content-Type':'application/json'},...(body!==undefined?{body:JSON.stringify(body)}:{})});
   const data=await r.json().catch(()=>null);
-  if(auth&&!session)throw new Error('Phiên đã kết thúc. Vui lòng đăng nhập lại.');
+  checkIdleSession();
+  if(auth&&(epoch!==sessionEpoch||!session))throw new Error('Phiên đã kết thúc. Vui lòng đăng nhập lại.');
+  if(auth&&(!r.ok&&(r.status===401||data?.message==='NOT_STAFF'||data?.message==='NOT_ADMIN')))endLocalSession(data?.message==='NOT_STAFF'?'Tài khoản chưa được cấp quyền hoặc đã bị khóa.':'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.');
   if(!r.ok){const msg=data?.message||data?.error_description||'';const messages={NOT_STAFF:'Tài khoản chưa được cấp quyền hoặc đã bị khóa.',FORBIDDEN:'Bạn không có quyền thực hiện thao tác này.',PRICE_CHANGED:'Bảng giá đã thay đổi. Vui lòng tải lại và chọn lại dịch vụ.',OFFER_UNAVAILABLE:'Dịch vụ hoặc người thực hiện không còn nhận lịch.',ACCOUNT_NOT_FOUND:'Email chưa có tài khoản Supabase. Hãy tạo tài khoản trong Authentication trước.',ACCOUNT_ALREADY_LINKED:'Email đã được gán cho nhân sự khác.',LAST_ADMIN:'Không thể khóa hoặc hạ quyền admin cuối cùng.',INVALID_ADMIN:'Admin phải có email tài khoản và đang hoạt động.',NO_PRICES:'Cần đặt giá cho ít nhất một dịch vụ và người thực hiện.',UPGRADE_REQUIRED:'Ứng dụng đã nâng cấp. Vui lòng tải lại trang.',APPOINTMENT_COMPLETED:'Lịch đã hoàn thành không thể dời giờ.',APPOINTMENT_CANCELLED:'Lịch đã hủy không thể chỉnh sửa.'};if(messages[msg])throw new Error(messages[msg]);if(msg.includes('SLOT_TAKEN')||data?.code==='23P01')throw new Error('Giờ này vừa có khách đặt. Vui lòng chọn khung giờ khác.');if(msg.includes('INVALID_CUSTOMER'))throw new Error('Vui lòng kiểm tra tên và số điện thoại.');if(msg.includes('INVALID_SLOT'))throw new Error('Giờ đã chọn không còn hợp lệ. Vui lòng chọn lại.');if(msg.includes('NOT_ADMIN'))throw new Error('Tài khoản này không có quyền quản trị.');if(msg.includes('Invalid login'))throw new Error('ID hoặc mật khẩu chưa đúng.');throw new Error(msg||'Không thể kết nối. Vui lòng thử lại.');}
   return data;
 }
@@ -74,14 +99,18 @@ function login(){
   $('#app').innerHTML=`<section class="card login"><div class="eyebrow">TiCaBeBe / Quản trị</div><h2 style="margin-top:20px">Chào mừng trở lại.</h2><p class="muted">Đăng nhập để quản lý lịch hẹn của tiệm.</p>${!configured?'<div class="notice">Cần kết nối Supabase trước khi đăng nhập.</div>':''}<form id="login" method="post" autocomplete="on"><label class="field">ID / email nhân viên<input name="id" autocomplete="username" placeholder="admin hoặc email" required></label><label class="field">Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label><p class="error" id="login-error" role="alert"></p><button class="primary full" ${!configured?'disabled':''}>Đăng nhập <span>↗</span></button></form><a class="link-button" style="display:block;text-align:center" href="#booking">Quay lại đặt lịch</a></section>`;
   $('#login').onsubmit=async e=>{
     e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;
-    const f=new FormData(e.target),id=f.get('id').trim(),passwordInput=e.target.elements.password;
+    const form=e.target,loginEpoch=sessionEpoch,loginGeneration=generation;
+    const f=new FormData(form),id=f.get('id').trim(),passwordInput=form.elements.password;
     const credentials={email:id===cfg.adminId?cfg.adminEmail:id,password:f.get('password')};
     f.delete('password');
     try{
       const pending=request('/auth/v1/token?grant_type=password',{method:'POST',body:credentials});
       passwordInput.value='';
-      saveSession(await pending);credentials.password='';await admin();
+      const result=await pending;credentials.password='';
+      if(loginEpoch!==sessionEpoch||loginGeneration!==generation||!form.isConnected){void revokeSessionTokens(result);return;}
+      saveSession(result);await admin();
     }catch(err){
+      if(loginGeneration!==generation||!form.isConnected)return;
       saveSession(null);
       if(!$('#login-error'))login();
       $('#login-error').textContent=err.message;
@@ -112,12 +141,12 @@ function drawMonthDetails(){
 async function admin(){if(!session){login();return;}await loadSettings();if(settings.studio_version===2)return openStudio();await rpc('require_admin',{},true);await loadSettings();await loadAppointments();$('#app').innerHTML=`<div class="admin-top"><h1>Lịch hẹn</h1><div class="admin-actions"><button type="button" class="secondary" id="open-settings">Cấu hình</button><details class="admin-menu"><summary aria-label="Tùy chọn tài khoản">⋯</summary><div><button id="logout" class="secondary">Đăng xuất</button></div></details></div></div><div id="stats" class="stat-row"></div><div class="toolbar"><div class="segments">${[['day','Ngày'],['week','Tuần'],['month','Tháng']].map(([k,v])=>`<button class="${view===k?'active':''}" data-view="${k}">${v}</button>`).join('')}</div><button class="secondary" id="today">Hôm nay</button><button class="secondary" id="reload" aria-label="Làm mới lịch">↻</button><div class="period-nav"><button class="secondary" id="prev" aria-label="Kỳ trước">←</button><input id="admin-date" aria-label="Ngày xem lịch" type="date" value="${adminDay}"><button class="secondary" id="next" aria-label="Kỳ sau">→</button></div></div><p id="admin-error" class="error" role="alert"></p><div id="appointments"></div><dialog id="settings-dialog" class="settings" aria-labelledby="settings-title"><div class="edit-heading"><h2 id="settings-title">Cấu hình lịch cắt</h2><button type="button" id="close-settings" class="secondary icon-button" aria-label="Đóng cấu hình">✕</button></div><p class="muted settings-note">Giờ bắt đầu cách nhau 15 phút. Lịch đã đặt giữ nguyên thời lượng.</p><form id="settings"><div class="fields"><label class="field">Tên tiệm<input name="shop_name" value="${esc(settings.shop_name)}" required maxlength="80"></label><label class="field">Giờ mở cửa<input name="open_time" type="time" step="900" value="${settings.open_time.slice(0,5)}" required></label><label class="field">Giờ đóng cửa<input name="close_time" type="time" step="900" value="${settings.close_time.slice(0,5)}" required></label><label class="field">Thời gian cắt (phút)<input name="duration_minutes" type="number" min="15" max="240" step="15" value="${settings.duration_minutes}" required></label><label class="field">Nghỉ sau mỗi lượt (phút)<input name="buffer_minutes" type="number" min="0" max="120" step="15" value="${settings.buffer_minutes}" required></label><label class="field">Cho đặt trước tối đa (ngày)<input name="booking_days" type="number" min="1" max="180" value="${settings.booking_days}" required></label></div><div style="margin-top:20px;font-size:12px">Ngày nghỉ hàng tuần <div style="display:flex;gap:15px;flex-wrap:wrap;margin-top:12px">${['CN','T2','T3','T4','T5','T6','T7'].map((d,i)=>`<label><input style="width:auto;min-height:0" name="closed_days" type="checkbox" value="${i}" ${settings.closed_days.includes(i)?'checked':''}> ${d}</label>`).join('')}</div></div><p id="settings-error" class="error" role="alert"></p><button class="primary" style="margin-top:20px">Lưu cấu hình</button></form></dialog><dialog id="edit-dialog"></dialog>`;drawAppointments();
   $('#open-settings').onclick=()=>{$('#settings-dialog').showModal();$('#close-settings').focus({preventScroll:true});};
   $('#close-settings').onclick=()=>$('#settings-dialog').close();
-  $('#logout').onclick=async()=>{try{await request('/auth/v1/logout',{method:'POST',auth:true});}catch{}saveSession(null);route();};
+  $('#logout').onclick=logoutSession;
   $('.segments').onclick=async e=>{const b=e.target.closest('[data-view]');if(b){view=b.dataset.view;await refreshAdmin();}};
   $('#admin-date').onchange=async e=>{if(e.target.value){adminDay=e.target.value;await refreshAdmin();}};
   $('#prev').onclick=()=>move(-1);$('#next').onclick=()=>move(1);$('#today').onclick=()=>{adminDay=vnDate();refreshAdmin();};$('#reload').onclick=()=>refreshAdmin();
   $('#appointments').onclick=e=>{const date=e.target.closest('[data-calendar-day]');if(date&&!date.disabled){monthDay=date.dataset.calendarDay;drawMonthDetails();return;}const b=e.target.closest('[data-edit]');if(b)edit(appointments.find(a=>a.id===b.dataset.edit));};
-  $('#settings').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;const f=new FormData(e.target);try{await rpc('update_settings',{p_shop_name:f.get('shop_name').trim(),p_open:f.get('open_time'),p_close:f.get('close_time'),p_duration:Number(f.get('duration_minutes')),p_buffer:Number(f.get('buffer_minutes')),p_days:Number(f.get('booking_days')),p_closed:f.getAll('closed_days').map(Number)},true);await loadSettings();$('#settings-error').textContent='';$('#settings-dialog').close();toast('Đã lưu cấu hình lịch cắt.');}catch(err){$('#settings-error').textContent=err.message;}finally{b.disabled=false;}};
+  $('#settings').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;const f=new FormData(e.target);try{await rpc('update_settings',{p_shop_name:f.get('shop_name').trim(),p_open:f.get('open_time'),p_close:f.get('close_time'),p_duration:Number(f.get('duration_minutes')),p_buffer:Number(f.get('buffer_minutes')),p_days:Number(f.get('booking_days')),p_closed:f.getAll('closed_days').map(Number)},true);await loadSettings();$('#settings-error').textContent='';$('#settings-dialog').close();toast('Đã lưu cấu hình lịch cắt.');}catch(err){if($('#settings-error'))$('#settings-error').textContent=err.message;}finally{b.disabled=false;}};
 }
 async function refreshAdmin(){try{await admin();}catch(e){if($('#admin-error'))$('#admin-error').textContent=e.message;else toast(e.message);}}
 function move(n){if(view==='month'){const d=new Date(`${adminDay.slice(0,7)}-01T12:00:00+07:00`);d.setUTCMonth(d.getUTCMonth()+n);adminDay=vnDate(d);}else adminDay=addDays(adminDay,n*(view==='week'?7:1));refreshAdmin();}
@@ -181,12 +210,13 @@ function edit(a){
     try{
       await rpc('edit_appointment',body,true);dialog.close();await refreshAdmin();toast(body.p_cancel?'Đã hủy lịch hẹn.':'Đã cập nhật lịch hẹn.');
     }catch(err){
+      if(!dialog.isConnected)return;
       // Lịch khác có thể vừa được đặt sau lúc mở bộ chọn giờ.
       if(changing&&!body.p_cancel)await loadEditSlots();
       $('#edit-error').textContent=err.message;
     }finally{saving=false;controls();}
   }
 }
-async function openStudio(){return launchStudio({rpc,settings,catalog:await rpc('studio_catalog'),esc,toast,dateLabel,timeLabel,syncDateDisplays,slots,vnDate,addDays,rangeFor,generation,currentGeneration:()=>generation,route,logout:async()=>{try{await request('/auth/v1/logout',{method:'POST',auth:true});}catch{}saveSession(null);route();}});}
-async function route(){document.dispatchEvent(new Event('ticabebe:route'));clearInterval(timer);generation++;$('#app').innerHTML='<p class="empty">Đang chuẩn bị không gian của bạn…</p>';try{await loadSettings();if(settings.studio_version===2&&(location.hash!=='#admin'||session)){const catalog=await rpc('studio_catalog');if(location.hash==='#admin'||catalog.enabled){await openStudio();return;}}if(location.hash==='#admin'){if(session)await admin();else login();}else await booking();}catch(e){$('#app').innerHTML=`<section class="card login"><h2>Chưa thể tải ứng dụng</h2><p class="error">${esc(e.message)}</p><button class="primary" id="retry">Thử lại</button><a class="link-button" href="#booking">Trang đặt lịch</a></section>`;$('#retry').onclick=()=>{if(location.hash==='#admin')saveSession(null);route();};}}
+async function openStudio(){const studioGeneration=generation,catalog=await rpc('studio_catalog');if(studioGeneration!==generation)return;return launchStudio({rpc,settings,catalog,esc,toast,dateLabel,timeLabel,syncDateDisplays,slots,vnDate,addDays,rangeFor,generation,currentGeneration:()=>generation,route,logout:logoutSession});}
+async function route(){document.dispatchEvent(new Event('ticabebe:route'));clearInterval(timer);generation++;const routeGeneration=generation;$('#app').innerHTML='<p class="empty">Đang chuẩn bị không gian của bạn…</p>';try{assertTopLevel(window);await loadSettings();if(routeGeneration!==generation)return;if(settings.studio_version===2&&(location.hash!=='#admin'||session)){const catalog=await rpc('studio_catalog');if(routeGeneration!==generation)return;if(location.hash==='#admin'||catalog.enabled){await openStudio();return;}}if(location.hash==='#admin'){if(session)await admin();else login();}else await booking();}catch(e){if(routeGeneration!==generation)return;$('#app').innerHTML=`<section class="card login"><h2>Chưa thể tải ứng dụng</h2><p class="error">${esc(e.message)}</p><button class="primary" id="retry">Thử lại</button><a class="link-button" href="#booking">Trang đặt lịch</a></section>`;$('#retry').onclick=()=>{if(location.hash==='#admin')saveSession(null);route();};}}
 window.addEventListener('hashchange',route);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&$('#slots'))refreshAvailability();});route();

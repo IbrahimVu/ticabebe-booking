@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {secureApiUrl,assertSecurePage,minimalSession,PRIVATE_FETCH,SUPABASE_ORIGIN} from '../public/security.mjs';
+import {secureApiUrl,assertSecurePage,assertTopLevel,minimalSession,PRIVATE_FETCH,SUPABASE_ORIGIN} from '../public/security.mjs';
 test('thông tin đăng nhập chỉ được gửi đến đúng Supabase qua HTTPS',()=>{
   const path='/auth/v1/token?grant_type=password';
   assert.equal(secureApiUrl(SUPABASE_ORIGIN,path),SUPABASE_ORIGIN+path);
@@ -13,6 +13,11 @@ test('trang production không dùng HTTP, localhost được dùng để phát t
   assert.throws(()=>assertSecurePage(new URL('http://ibrahimvu.github.io/ticabebe-booking/')));
 });
 test('request không cache, không theo chuyển hướng, không gửi cookie/referrer',()=>assert.deepEqual(PRIVATE_FETCH,{cache:'no-store',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer'}));
+
+test('không cho giao diện nhạy cảm chạy trong iframe',()=>{
+ const top={};assert.doesNotThrow(()=>assertTopLevel({top,self:top}));
+ assert.throws(()=>assertTopLevel({top,self:{}}),/khung nhúng/);
+});
 test('phiên chỉ giữ token và hạn dùng, không giữ password hoặc dữ liệu người dùng',()=>{
   const result=minimalSession({access_token:'access',refresh_token:'refresh',expires_in:3600,password:'DO_NOT_STORE',user:{email:'private@example.com'},extra:'DO_NOT_STORE'},100);
   assert.deepEqual(result,{access_token:'access',refresh_token:'refresh',expires_at:3700});
