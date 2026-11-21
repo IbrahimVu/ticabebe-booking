@@ -1,22 +1,24 @@
 // Các tình huống phản hồi chậm từng có thể khôi phục phiên/hiển thị PII cũ.
 import {chromium} from 'playwright';
 import assert from 'node:assert/strict';
-import {vnDate} from '../public/booking.mjs';
+import {vnDate,addDays} from '../public/booking.mjs';
 let browser;try{browser=await chromium.launch({headless:true});}catch{browser=await chromium.launch({channel:'msedge',headless:true});}
 const base=process.env.TEST_URL||'http://127.0.0.1:4173',origin='https://ulhipapekijwwhylsafq.supabase.co',now=Date.now();
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const settings={studio_version:2,id:1,shop_name:'TiCaBeBe',open_time:'09:00',close_time:'20:00',duration_minutes:45,buffer_minutes:15,booking_days:30,closed_days:[]};
 const appointment={id:'11111111-1111-1111-1111-111111111111',customer_name:'PRIVATE_CUSTOMER',phone:'0901234567',staff_id:1,service_id:1,staff_name:'Thợ thử',service_name:'Cắt tóc',price:80000,status:'confirmed',progress:'scheduled',starts_at:`${vnDate()}T10:00:00+07:00`,ends_at:`${vnDate()}T10:45:00+07:00`,blocked_until:`${vnDate()}T11:00:00+07:00`};
-async function setup({seed=true,expired=false,idle=false}={}){
+async function setup({seed=true,expired=false,idle=false,legacy=false}={}){
  const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage(),errors=[],revoked=[];
- const state={listGate:null,refreshGate:null,loginGate:null,denied:false,apiCalls:0};
+ const state={listGate:null,refreshGate:null,loginGate:null,denied:false,apiCalls:0,bookGate:null,rejectBook:false};
  page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date(now)});
  if(seed)await page.addInitScript(({now,expired,idle})=>{if(!sessionStorage.getItem('test-seeded')){sessionStorage.setItem('test-seeded','yes');sessionStorage.setItem('ticabebe-session',JSON.stringify({version:1,lastActive:now-(idle?29*60000:0),session:{access_token:'old-token',refresh_token:'old-refresh',expires_at:now/1000+(expired?10:120)}}));}},{now,expired,idle});
  await page.route('**/config.js',r=>r.fulfill({contentType:'text/javascript',body:`window.APP_CONFIG=${JSON.stringify({supabaseUrl:origin,supabaseKey:'sb_publishable_test',adminId:'admin',adminEmail:'admin@example.com'})}`}));
  await page.route(origin+'/**',async route=>{
    state.apiCalls++;
    const req=route.request(),u=new URL(req.url()),name=u.pathname.split('/').at(-1),token=req.headers().authorization;let body=null,status=200;
-   if(name==='settings')body=[settings];
+   if(name==='settings')body=[legacy?{...settings,studio_version:undefined}:settings];
+   else if(name==='availability')body=[];
+   else if(name==='book_appointment'){if(state.bookGate){state.bookGate.seen.resolve();await state.bookGate.release.promise;}if(state.rejectBook){status=400;body={message:'INVALID_SLOT'};}else body={id:appointment.id,starts_at:appointment.starts_at,ends_at:appointment.ends_at};}
    else if(name==='studio_catalog')body={version:2,enabled:true,offers:[{staff_id:1,staff_name:'Thợ thử',service_id:1,service_name:'Cắt tóc',duration_minutes:45,buffer_minutes:15,price:80000}]};
    else if(name==='token'){
      if(u.searchParams.get('grant_type')==='refresh_token'){if(state.refreshGate){state.refreshGate.seen.resolve();await state.refreshGate.release.promise;}body={access_token:'refreshed-token',refresh_token:'refreshed-refresh',expires_at:now/1000+7200};}
@@ -31,7 +33,7 @@ async function setup({seed=true,expired=false,idle=false}={}){
    else throw new Error('Unexpected API '+name);
    await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Access-Control-Allow-Origin':'*'}});
  });
- return {context,page,state,errors,revoked,close:async()=>{for(const key of ['listGate','refreshGate','loginGate'])state[key]?.release.resolve();await context.close();}};
+ return {context,page,state,errors,revoked,close:async()=>{for(const key of ['listGate','refreshGate','loginGate','bookGate'])state[key]?.release.resolve();await context.close();}};
 }
 const gate=()=>({seen:deferred(),release:deferred()});
 try{
@@ -71,6 +73,16 @@ try{
    await env.page.goto(base+'/#admin');await env.page.locator('[data-appointment]').waitFor();env.state.denied=true;await env.page.reload();await env.page.locator('#login').waitFor();
    assert.equal(await env.page.evaluate(()=>sessionStorage.getItem('ticabebe-session')),null);assert.ok(!(await env.page.locator('body').innerText()).includes('PRIVATE_CUSTOMER'));assert.deepEqual(env.errors,[]);
  }finally{await env.close();}
+ // Receipt công khai và lỗi của request cũ không được ghi đè màn hình đăng nhập.
+ for(const rejectBook of [false,true]){
+   env=await setup({seed:false,legacy:true});try{
+     const {page,state}=env;state.bookGate=gate();state.rejectBook=rejectBook;await page.goto(base);await page.locator('#booking-form').waitFor();
+     await page.locator('#date').fill(addDays(vnDate(),1));await page.locator('#slots [data-slot]').first().click();await page.locator('[name=name]').fill('LEGACY_PRIVATE_CUSTOMER');await page.locator('[name=phone]').fill('0909999999');
+     await page.locator('#confirm').click();await state.bookGate.seen.promise;await page.getByRole('link',{name:'Quản trị'}).click();await page.locator('#login').waitFor();
+     const returned=page.waitForResponse(r=>r.url().endsWith('/rpc/book_appointment'));state.bookGate.release.resolve();await returned;await page.clock.runFor(100);
+     assert.equal(await page.locator('#login').count(),1);assert.ok(!(await page.locator('body').innerText()).includes('LEGACY_PRIVATE_CUSTOMER'));assert.deepEqual(env.errors,[]);
+   }finally{await env.close();}
+ }
  // Nhúng website vào iframe không được tải API hay hiện dữ liệu khách.
  env=await setup();try{
    await env.page.route(base+'/frame-security',r=>r.fulfill({contentType:'text/html',body:`<!doctype html><iframe src="${base}/#admin"></iframe>`}));

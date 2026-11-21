@@ -1,5 +1,7 @@
 # Bảo mật TiCaBeBe
 
+Báo cáo rà soát sâu gần nhất: [21/11/2026](SECURITY-REVIEW-2026-11-21.md), gồm phạm vi kiểm chứng, phát hiện đã sửa và các rủi ro còn lại. Không coi kết quả test là bảo đảm an toàn tuyệt đối.
+
 Người dùng đã chọn **HTTPS/TLS + siết bảo mật**. Đăng nhập dùng Supabase Auth chuẩn: gửi email/mật khẩu trong POST body qua HTTPS. TLS mã hóa trên đường truyền; Network trong chính trình duyệt vẫn hiển thị JSON trước khi mã hóa. Không thêm Base64, hash phía client hoặc khóa AES đặt trong frontend để tạo cảm giác giấu mật khẩu. Supabase lưu mật khẩu bằng bcrypt có salt; mã ứng dụng không lưu mật khẩu.
 
 ## Bảo vệ trong mã nguồn
