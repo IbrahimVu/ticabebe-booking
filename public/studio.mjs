@@ -12,7 +12,7 @@ export async function launchStudio(ctx){
  const rpcError=e=>{if(!dead())toast(e.message);};
  const selectOptions=(rows,key,label,value)=>rows.map(r=>`<option value="${esc(r[key])}" ${String(r[key])===String(value)?'selected':''}>${esc(label(r))}</option>`).join('');
  function closeButton(title){return `<div class="edit-heading"><h2>${title}</h2><button type="button" class="secondary" data-close>Đóng</button></div>`;}
- function showDialog(html){const d=$('#studio-dialog');d.innerHTML=html;syncDateDisplays(d);d.showModal();d.querySelector('[data-close]').onclick=()=>d.close();d.querySelector('[data-close]').focus({preventScroll:true});return d;}
+ function showDialog(html){const d=$('#studio-dialog');d.classList.remove('studio-management');d.innerHTML=html;syncDateDisplays(d);d.showModal();d.querySelector('[data-close]').onclick=()=>d.close();d.querySelector('[data-close]').focus({preventScroll:true});return d;}
  function customerSlots(){
    if(!$('#studio-slots'))return;
    const available=offer&&!settings.closed_days.includes(new Date(`${day}T12:00:00+07:00`).getUTCDay())?slots({...settings,...offer},busy,day):[];
@@ -112,11 +112,19 @@ export async function launchStudio(ctx){
    $('#studio-edit').onsubmit=e=>{e.preventDefault();save(false);};$('#studio-cancel').onclick=()=>{if(confirm('Hủy lịch hẹn này?'))save(true);};
  }
  async function management(tab='services'){
-   const data=await rpc('studio_management',{},true);if(dead())return;
-   const d=showDialog(`${closeButton('Quản lý tiệm')}<div class="segments studio-tabs"><button data-tab="services" class="${tab==='services'?'active':''}">Dịch vụ</button><button data-tab="prices" class="${tab==='prices'?'active':''}">Giá theo người</button><button data-tab="hours" class="${tab==='hours'?'active':''}">Giờ mở cửa</button>${me.role==='admin'?`<button data-tab="staff" class="${tab==='staff'?'active':''}">Nhân sự</button>`:''}</div><div id="studio-manage-content"></div><p id="studio-manage-error" class="error" role="alert"></p>${me.role==='admin'&&!data.enabled?'<div class="notice"><p>Cấu hình giá cho ít nhất một người trước khi kích hoạt. Lịch cũ vẫn giữ nguyên.</p><button class="primary" id="studio-activate">Kích hoạt đặt lịch mới</button></div>':''}`);
-   d.querySelector('[data-tab]').parentElement.onclick=e=>{const b=e.target.closest('[data-tab]');if(b){d.close();management(b.dataset.tab).catch(rpcError);}};
+   let data=await rpc('studio_management',{},true);if(dead())return;
+   const d=showDialog(`${closeButton('Quản lý tiệm')}<div class="segments studio-tabs"><button data-tab="services" class="${tab==='services'?'active':''}">Dịch vụ</button><button data-tab="prices" class="${tab==='prices'?'active':''}">Giá theo người</button><button data-tab="hours" class="${tab==='hours'?'active':''}">Giờ mở cửa</button>${me.role==='admin'?`<button data-tab="staff" class="${tab==='staff'?'active':''}">Nhân sự</button>`:''}</div><div class="studio-manage-body"><div id="studio-manage-content"></div><p id="studio-manage-error" class="error" role="alert"></p>${me.role==='admin'&&!data.enabled?'<div class="notice"><p>Cấu hình giá cho ít nhất một người trước khi kích hoạt. Lịch cũ vẫn giữ nguyên.</p><button class="primary" id="studio-activate">Kích hoạt đặt lịch mới</button></div>':''}</div>`);
+   d.classList.add('studio-management');
+   const tabs=[...d.querySelectorAll('[data-tab]')];
+   d.querySelector('.studio-tabs').setAttribute('aria-label','Mục quản lý');
+   d.querySelector('.studio-tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b&&!b.disabled&&b.dataset.tab!==tab)renderTab(b.dataset.tab);};
    const content=$('#studio-manage-content');
-   async function submit(form,fn,args){const b=form.querySelector('button[type="submit"]');b.disabled=true;try{await rpc(fn,args,true);if(dead())return;if(fn==='studio_settings'){settings.shop_name=args.p_shop_name;settings.open_time=args.p_open;settings.close_time=args.p_close;settings.booking_days=args.p_days;settings.closed_days=args.p_closed;}d.close();await management(tab);toast('Đã lưu.');}catch(e){if(!dead()&&$('#studio-manage-error'))$('#studio-manage-error').textContent=e.message;}finally{b.disabled=false;}}
+   const managementOpen=()=>!dead()&&d.open&&content.isConnected;
+   async function submit(form,fn,args){const b=form.querySelector('button[type="submit"]');b.disabled=true;tabs.forEach(t=>t.disabled=true);try{await rpc(fn,args,true);if(!managementOpen())return;if(fn==='studio_settings'){settings.shop_name=args.p_shop_name;settings.open_time=args.p_open;settings.close_time=args.p_close;settings.booking_days=args.p_days;settings.closed_days=args.p_closed;}const fresh=await rpc('studio_management',{},true);if(!managementOpen())return;data=fresh;renderTab(tab);toast('Đã lưu.');}catch(e){if(managementOpen())$('#studio-manage-error').textContent=e.message;}finally{b.disabled=false;tabs.forEach(t=>t.disabled=false);}}
+   function renderTab(nextTab){
+     tab=nextTab;tabs.forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+     $('#studio-manage-error').textContent='';
+     d.querySelector('.studio-manage-body').scrollTop=0;
    if(tab==='hours'){
      content.innerHTML=`<form id="studio-hours-form"><label class="field">Tên tiệm<input name="name" value="${esc(settings.shop_name)}" maxlength="80" required></label><div class="fields"><label class="field">Giờ mở cửa<input name="open" type="time" step="900" value="${settings.open_time.slice(0,5)}" required></label><label class="field">Giờ đóng cửa<input name="close" type="time" step="900" value="${settings.close_time.slice(0,5)}" required></label></div><label class="field">Cho đặt trước tối đa (ngày)<input name="days" type="number" min="1" max="180" value="${settings.booking_days}" required></label><p>Ngày nghỉ hàng tuần</p>${['CN','T2','T3','T4','T5','T6','T7'].map((label,i)=>`<label class="studio-check"><input name="closed" type="checkbox" value="${i}" ${settings.closed_days.includes(i)?'checked':''}>${label}</label>`).join('')}<button type="submit" class="primary">Lưu giờ mở cửa</button></form>`;
      $('#studio-hours-form').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);submit(e.target,'studio_settings',{p_shop_name:f.get('name').trim(),p_open:f.get('open'),p_close:f.get('close'),p_days:Number(f.get('days')),p_closed:f.getAll('closed').map(Number)});};
@@ -133,7 +141,9 @@ export async function launchStudio(ctx){
      $('#studio-staff-edit').onchange=e=>{const t=data.staff.find(t=>String(t.id)===e.target.value),f=$('#studio-staff-form');f.elements.name.value=t?.name||'';f.elements.email.value=t?.email||'';f.elements.role.value=t?.role||'barber';f.elements.active.checked=t?.active??true;f.elements.bookable.checked=t?.bookable??true;};
      $('#studio-staff-form').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);submit(e.target,'studio_staff_save',{p_id:Number($('#studio-staff-edit').value)||null,p_name:f.get('name').trim(),p_email:f.get('email').trim(),p_role:f.get('role'),p_active:f.has('active'),p_bookable:f.has('bookable')});};
    }
-   if($('#studio-activate'))$('#studio-activate').onclick=async e=>{e.target.disabled=true;try{await rpc('studio_activate',{},true);if(dead())return;d.close();toast('Đã kích hoạt đặt dịch vụ theo nhân sự.');await management(tab);}catch(err){if(dead())return;$('#studio-manage-error').textContent=err.message;e.target.disabled=false;}};
+   }
+   renderTab(tab);
+   if($('#studio-activate'))$('#studio-activate').onclick=async e=>{e.target.disabled=true;try{await rpc('studio_activate',{},true);if(!managementOpen())return;e.target.closest('.notice').remove();data.enabled=true;toast('Đã kích hoạt đặt dịch vụ theo nhân sự.');}catch(err){if(!managementOpen())return;$('#studio-manage-error').textContent=err.message;e.target.disabled=false;}};
  }
  try{if(location.hash==='#admin')await dashboard();else await customer();}catch(e){stop();throw e;}
 }

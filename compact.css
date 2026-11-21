@@ -121,3 +121,7 @@ summary::-webkit-details-marker { display: none; }
 #studio-booking select,#studio-manage-content select,#studio-filter,#studio-edit select{width:100%;min-height:48px;font:inherit;font-size:16px;padding:10px;border:1px solid #c9c3b8;border-radius:8px;background:white;color:#24211e}
 #studio-dialog{width:min(640px,calc(100% - 20px));max-height:90dvh;overflow:auto;padding:20px}#studio-dialog .fields{margin-top:12px}#studio-dialog .field{margin-top:12px}#studio-dialog .notice{margin-top:20px}
 @media(max-width:480px){.studio-appointment{gap:8px;grid-template-columns:48px minmax(0,1fr) 44px}.studio-appointment>span:last-child{font-size:.8rem}#studio-dialog{margin:auto 0 0;width:100%;max-width:100%;border-radius:18px 18px 0 0;max-height:94dvh;padding:16px}#studio-dialog .dialog-actions{position:sticky;bottom:-16px;background:white;padding:12px 0}.studio-tabs button{font-size:.875rem;padding:8px}.admin-top small{font-size:.875rem}}
+#studio-dialog.studio-management[open]{display:flex;flex-direction:column;height:min(780px,90dvh);overflow:hidden}
+#studio-dialog.studio-management>.edit-heading,#studio-dialog.studio-management>.studio-tabs{flex-shrink:0}
+.studio-manage-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 4px 2px}
+@media(max-width:480px){#studio-dialog.studio-management[open]{height:94dvh}}

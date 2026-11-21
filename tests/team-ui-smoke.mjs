@@ -5,7 +5,7 @@ import {vnDate,addDays} from '../public/booking.mjs';
 let browser;try{browser=await chromium.launch({headless:true});}catch{browser=await chromium.launch({channel:'msedge',headless:true});}
 const page=await browser.newPage({viewport:{width:390,height:844},locale:'en-US'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const tomorrow=addDays(vnDate(),1),base=process.env.TEST_URL||'http://127.0.0.1:4173';
-let role='admin',rows=[],offerPrice=80000,lastBody,conflict=false;
+let role='admin',rows=[],offerPrice=80000,lastBody,conflict=false,managementRequests=0;
 const settings={studio_version:2,id:1,shop_name:'TiCaBeBe',open_time:'09:00',close_time:'20:00',duration_minutes:45,buffer_minutes:15,booking_days:30,closed_days:[]};
 const staff=[{id:1,name:'Chị Quản lý',role:'manager',email:'manager@example.com',active:true,bookable:true},{id:2,name:'Anh Thợ',role:'barber',email:'barber@example.com',active:true,bookable:true}];
 const services=[{id:1,name:'Cắt tóc',duration_minutes:45,buffer_minutes:15,active:true},{id:2,name:'Gội đầu',duration_minutes:30,buffer_minutes:15,active:true}];
@@ -23,7 +23,7 @@ await page.route('https://ulhipapekijwwhylsafq.supabase.co/**',async route=>{
    const a={id:crypto.randomUUID(),customer_name:d.p_name,phone:d.p_phone,starts_at:new Date(start).toISOString(),ends_at:new Date(start+o.duration_minutes*60000).toISOString(),blocked_until:new Date(start+(o.duration_minutes+o.buffer_minutes)*60000).toISOString(),staff_id:d.p_staff,service_id:d.p_service,staff_name:o.staff_name,service_name:o.service_name,price:o.price,status:'confirmed',progress:'scheduled'};rows.push(a);const {id,starts_at,ends_at,price,staff_name,service_name}=a;body={id,starts_at,ends_at,price,staff_name,service_name};}
  }else if(f==='token')body={access_token:'test',refresh_token:'refresh',expires_at:Date.now()/1000+3600};
  else if(f==='studio_appointments')body=rows.filter(a=>(role!=='barber'||a.staff_id===2)&&vnDate(new Date(a.starts_at))>=d.p_from&&vnDate(new Date(a.starts_at))<d.p_to);
- else if(f==='studio_management')body={enabled:true,staff,services,prices:offers().map(o=>({staff_id:o.staff_id,service_id:o.service_id,price:o.price,active:true}))};
+ else if(f==='studio_management'){managementRequests++;body={enabled:true,staff,services,prices:offers().map(o=>({staff_id:o.staff_id,service_id:o.service_id,price:o.price,active:true}))};}
  else if(f==='studio_price_save'){offerPrice=d.p_price;lastBody=d;}
  else if(f==='studio_service_save'){lastBody=d;body=3;}
  else if(f==='studio_staff_save'){lastBody=d;body=3;}
@@ -44,7 +44,20 @@ try{
  await page.locator('#studio-person').selectOption('1');await page.getByRole('button',{name:'10:00',exact:true}).waitFor();
  await page.getByRole('link',{name:'Quản trị'}).click();await page.locator('[name=id]').fill('admin');await page.locator('[name=password]').fill('test-only');await page.locator('#login button').click();await page.locator('#studio-admin-day').waitFor();
  await page.locator('#studio-admin-day').fill(tomorrow);await page.locator('[data-appointment]').click();await page.locator('#studio-change').click();await page.getByRole('button',{name:'10:45',exact:true}).click();await page.locator('#studio-edit [name=progress]').selectOption('serving');await page.locator('#studio-save').click();await page.locator('#studio-dialog').waitFor({state:'hidden'});assert.ok(lastBody.p_start.includes('10:45'));assert.equal(lastBody.p_progress,'serving');
- await page.locator('#studio-manage').click();await page.locator('[data-tab=prices]').click();await page.locator('#studio-price-form [name=staff]').selectOption('2');await page.locator('#studio-price-form [name=price]').fill('95000');await page.getByRole('button',{name:'Lưu giá',exact:true}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_price,95000);
+ await page.locator('#studio-manage').click();await page.locator('#studio-service-form').waitFor();
+ const initialManagementRequests=managementRequests;
+ await page.locator('#studio-dialog').evaluate(d=>{window.__dialogOpenChanges=0;new MutationObserver(records=>{window.__dialogOpenChanges+=records.length;}).observe(d,{attributes:true,attributeFilter:['open']});});
+ for(const width of [390,1440]){
+   await page.setViewportSize({width,height:844});const before=await page.locator('#studio-dialog').boundingBox();
+   for(const tab of ['prices','hours','staff','services','staff','prices']){
+     await page.locator('[data-tab='+tab+']').click();assert.equal(await page.locator('#studio-dialog').evaluate(d=>d.open),true);
+     assert.equal(await page.evaluate(()=>document.activeElement.dataset.tab),tab,'tab focus stays in place');
+     const after=await page.locator('#studio-dialog').boundingBox();for(const key of ['x','y','width','height'])assert.ok(Math.abs(before[key]-after[key])<1,'dialog must not jump '+key);
+   }
+ }
+ assert.equal(managementRequests,initialManagementRequests,'switching tabs must not reload management API');
+ assert.equal(await page.evaluate(()=>window.__dialogOpenChanges),0,'dialog/backdrop must never close and reopen on tab switches');
+ await page.setViewportSize({width:390,height:844});await page.locator('[data-tab=prices]').click();await page.locator('#studio-price-form [name=staff]').selectOption('2');await page.locator('#studio-price-form [name=price]').fill('95000');await page.getByRole('button',{name:'Lưu giá',exact:true}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_price,95000);
  await page.locator('[data-tab=staff]').click();await page.locator('#studio-staff-form [name=name]').fill('Nhân sự mới');await page.locator('#studio-staff-form [name=email]').fill('new@example.com');await page.locator('#studio-staff-form [name=role]').selectOption('manager');await page.getByRole('button',{name:'Lưu nhân sự'}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_role,'manager');
  await page.locator('[data-tab=services]').click();await page.locator('#studio-service-form [name=name]').fill('Uốn tóc');await page.locator('#studio-service-form [name=duration]').fill('90');await page.getByRole('button',{name:'Lưu dịch vụ',exact:true}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_duration,90);
  for(const width of [320,390,768]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile overflow '+width);assert.ok(await page.locator('#studio-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth),'dialog overflow '+width);}
