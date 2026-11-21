@@ -1,0 +1,6 @@
+project_id = "ulhipapekijwwhylsafq"
+
+[functions.staff-create]
+# Gateway legacy JWT check is replaced by Auth /user validation on every request.
+# Anonymous requests are rejected inside the function; no public signup enabled.
+verify_jwt = false

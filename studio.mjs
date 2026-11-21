@@ -1,6 +1,6 @@
 // Giao diện nhiều nhân sự. Mọi kiểm tra quyền/giá/trùng lịch vẫn thực hiện tại DB.
 export async function launchStudio(ctx){
- const {rpc,settings,catalog,esc,toast,dateLabel,timeLabel,syncDateDisplays,slots,vnDate,addDays,rangeFor,logout}=ctx;
+ const {rpc,createStaff,settings,catalog,esc,toast,dateLabel,timeLabel,syncDateDisplays,slots,vnDate,addDays,rangeFor,logout}=ctx;
  const $=s=>document.querySelector(s),money=n=>n==null?'Chưa đặt giá':new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND',maximumFractionDigits:0}).format(n);
  const roles={admin:'Admin',manager:'Quản lý',barber:'Thợ cắt tóc'},progress={scheduled:'Đã xác nhận',serving:'Đang phục vụ',completed:'Hoàn thành'};
  let day=vnDate(),view='day',selected='',busy=[],offer=null,appointments=[],me=null,filter='',revision=0,pending=false,disposed=false,poll;
@@ -12,7 +12,7 @@ export async function launchStudio(ctx){
  const rpcError=e=>{if(!dead())toast(e.message);};
  const selectOptions=(rows,key,label,value)=>rows.map(r=>`<option value="${esc(r[key])}" ${String(r[key])===String(value)?'selected':''}>${esc(label(r))}</option>`).join('');
  function closeButton(title){return `<div class="edit-heading"><h2>${title}</h2><button type="button" class="secondary" data-close>Đóng</button></div>`;}
- function showDialog(html){const d=$('#studio-dialog');d.classList.remove('studio-management');d.innerHTML=html;syncDateDisplays(d);d.showModal();d.querySelector('[data-close]').onclick=()=>d.close();d.querySelector('[data-close]').focus({preventScroll:true});return d;}
+ function showDialog(html){const d=$('#studio-dialog');d.classList.remove('studio-management');d.innerHTML=html;syncDateDisplays(d);d.showModal();const clearPasswords=()=>d.querySelectorAll('input[type=password]').forEach(input=>input.value='');d.onclose=clearPasswords;d.oncancel=clearPasswords;d.querySelector('[data-close]').onclick=()=>{clearPasswords();d.close();};d.querySelector('[data-close]').focus({preventScroll:true});return d;}
  function customerSlots(){
    if(!$('#studio-slots'))return;
    const available=offer&&!settings.closed_days.includes(new Date(`${day}T12:00:00+07:00`).getUTCDay())?slots({...settings,...offer},busy,day):[];
@@ -120,7 +120,7 @@ export async function launchStudio(ctx){
    d.querySelector('.studio-tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b&&!b.disabled&&b.dataset.tab!==tab)renderTab(b.dataset.tab);};
    const content=$('#studio-manage-content');
    const managementOpen=()=>!dead()&&d.open&&content.isConnected;
-   async function submit(form,fn,args){const b=form.querySelector('button[type="submit"]');b.disabled=true;tabs.forEach(t=>t.disabled=true);try{await rpc(fn,args,true);if(!managementOpen())return;if(fn==='studio_settings'){settings.shop_name=args.p_shop_name;settings.open_time=args.p_open;settings.close_time=args.p_close;settings.booking_days=args.p_days;settings.closed_days=args.p_closed;}const fresh=await rpc('studio_management',{},true);if(!managementOpen())return;data=fresh;renderTab(tab);toast('Đã lưu.');}catch(e){if(managementOpen())$('#studio-manage-error').textContent=e.message;}finally{b.disabled=false;tabs.forEach(t=>t.disabled=false);}}
+   async function submit(form,fn,args){const b=form.querySelector('button[type="submit"]');b.disabled=true;tabs.forEach(t=>t.disabled=true);try{const pending=fn==='staff-create'?createStaff(args):rpc(fn,args,true);if(fn==='staff-create')args.password='';await pending;if(!managementOpen())return;if(fn==='studio_settings'){settings.shop_name=args.p_shop_name;settings.open_time=args.p_open;settings.close_time=args.p_close;settings.booking_days=args.p_days;settings.closed_days=args.p_closed;}const fresh=await rpc('studio_management',{},true);if(!managementOpen())return;data=fresh;renderTab(tab);toast('Đã lưu.');}catch(e){if(managementOpen())$('#studio-manage-error').textContent=e.message;}finally{b.disabled=false;tabs.forEach(t=>t.disabled=false);}}
    function renderTab(nextTab){
      tab=nextTab;tabs.forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
      $('#studio-manage-error').textContent='';
@@ -137,9 +137,25 @@ export async function launchStudio(ctx){
      const form=$('#studio-price-form');const update=()=>{const p=data.prices.find(p=>String(p.staff_id)===form.elements.staff.value&&String(p.service_id)===form.elements.service.value);form.elements.price.value=p?.price??'';form.elements.active.checked=p?.active??true;};form.elements.staff.onchange=update;form.elements.service.onchange=update;update();
      form.onsubmit=e=>{e.preventDefault();const f=new FormData(form);submit(form,'studio_price_save',{p_staff:Number(f.get('staff')),p_service:Number(f.get('service')),p_price:Number(f.get('price')),p_active:f.has('active')});};
    }else if(tab==='staff'&&me.role==='admin'){
-     content.innerHTML=`<label class="field">Chọn nhân sự<select id="studio-staff-edit"><option value="">Thêm nhân sự mới</option>${selectOptions(data.staff,'id',t=>`${t.name} · ${roles[t.role]}${t.active?'':' (đã khóa)'}`)}</select></label><form id="studio-staff-form"><label class="field">Tên hiển thị<input name="name" minlength="2" maxlength="80" required></label><label class="field">Email tài khoản Supabase<input name="email" type="email" autocomplete="off"></label><p class="muted">Tạo tài khoản đăng nhập trong Supabase Authentication trước, rồi nhập email tại đây để cấp quyền. Để trống nếu chỉ thêm người nhận lịch, chưa cần đăng nhập.</p><label class="field">Vai trò<select name="role"><option value="barber">Thợ cắt tóc</option><option value="manager">Quản lý</option><option value="admin">Admin</option></select></label><label class="studio-check"><input name="active" type="checkbox" checked> Tài khoản/nhân sự đang hoạt động</label><label class="studio-check"><input name="bookable" type="checkbox" checked> Hiện cho khách chọn đặt lịch</label><button type="submit" class="primary">Lưu nhân sự</button></form>`;
-     $('#studio-staff-edit').onchange=e=>{const t=data.staff.find(t=>String(t.id)===e.target.value),f=$('#studio-staff-form');f.elements.name.value=t?.name||'';f.elements.email.value=t?.email||'';f.elements.role.value=t?.role||'barber';f.elements.active.checked=t?.active??true;f.elements.bookable.checked=t?.bookable??true;};
-     $('#studio-staff-form').onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);submit(e.target,'studio_staff_save',{p_id:Number($('#studio-staff-edit').value)||null,p_name:f.get('name').trim(),p_email:f.get('email').trim(),p_role:f.get('role'),p_active:f.has('active'),p_bookable:f.has('bookable')});};
+     content.innerHTML=`<label class="field">Chọn nhân sự<select id="studio-staff-edit"><option value="">Thêm nhân sự mới</option>${selectOptions(data.staff,'id',t=>`${t.name} · ${roles[t.role]}${t.active?'':' (đã khóa)'}`)}</select></label><form id="studio-staff-form"><label class="field">Tên hiển thị<input name="name" minlength="2" maxlength="80" required></label><label class="field">Tài khoản đăng nhập<select name="account_mode"><option value="create">Tạo tài khoản mới</option><option value="link">Liên kết tài khoản đã có</option><option value="none">Chưa cấp tài khoản</option></select></label><label class="field" id="studio-email-field">Email đăng nhập<input name="email" type="email" autocomplete="off" maxlength="254" required></label><label class="field" id="studio-password-field">Mật khẩu tài khoản mới<input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required></label><p class="muted" id="studio-account-hint">Tạo tài khoản Supabase và cấp vai trò khi lưu. Mật khẩu từ 12 ký tự; chỉ gửi qua HTTPS, không lưu trên website.</p><label class="field">Vai trò<select name="role"><option value="barber">Thợ cắt tóc</option><option value="manager">Quản lý</option><option value="admin">Admin</option></select></label><label class="studio-check"><input name="active" type="checkbox" checked> Tài khoản/nhân sự đang hoạt động</label><label class="studio-check"><input name="bookable" type="checkbox" checked> Hiện cho khách chọn đặt lịch</label><button type="submit" class="primary">Lưu nhân sự</button></form>`;
+     const staffForm=$('#studio-staff-form');
+     function accountFields(){
+       const mode=staffForm.elements.account_mode.value,creating=mode==='create';
+       $('#studio-email-field').hidden=mode==='none';staffForm.elements.email.required=mode!=='none';
+       $('#studio-password-field').hidden=!creating;staffForm.elements.password.required=creating;staffForm.elements.password.disabled=!creating;staffForm.elements.password.value='';
+       $('#studio-account-hint').textContent=creating?'Tạo tài khoản Supabase và cấp vai trò khi lưu. Mật khẩu từ 12 ký tự; chỉ gửi qua HTTPS, không lưu trên website.':mode==='link'?'Liên kết email đã có trên Supabase; giữ nguyên mật khẩu hiện tại.':'Nhân sự chỉ nhận lịch, chưa có quyền đăng nhập.';
+     }
+     staffForm.elements.account_mode.onchange=accountFields;
+     $('#studio-staff-edit').onchange=e=>{const t=data.staff.find(t=>String(t.id)===e.target.value),f=staffForm;f.elements.name.value=t?.name||'';f.elements.email.value=t?.email||'';f.elements.role.value=t?.role||'barber';f.elements.active.checked=t?.active??true;f.elements.bookable.checked=t?.bookable??true;f.elements.account_mode.querySelector('[value=create]').disabled=Boolean(t);f.elements.account_mode.value=t?(t.email?'link':'none'):'create';accountFields();};
+     staffForm.onsubmit=e=>{
+       e.preventDefault();const f=new FormData(staffForm),mode=f.get('account_mode'),id=Number($('#studio-staff-edit').value)||null;
+       const common={name:f.get('name').trim(),email:mode==='none'?'':f.get('email').trim(),role:f.get('role'),active:f.has('active'),bookable:f.has('bookable')};
+       if(mode==='create'){
+         if(id){$('#studio-manage-error').textContent='Chỉ tạo tài khoản khi thêm nhân sự mới.';return;}
+         const password=f.get('password');f.delete('password');staffForm.elements.password.value='';submit(staffForm,'staff-create',{...common,password});
+       }else submit(staffForm,'studio_staff_save',{p_id:id,p_name:common.name,p_email:common.email,p_role:common.role,p_active:common.active,p_bookable:common.bookable});
+     };
+     accountFields();
    }
    }
    renderTab(tab);

@@ -5,7 +5,7 @@ import {vnDate,addDays} from '../public/booking.mjs';
 let browser;try{browser=await chromium.launch({headless:true});}catch{browser=await chromium.launch({channel:'msedge',headless:true});}
 const page=await browser.newPage({viewport:{width:390,height:844},locale:'en-US'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const tomorrow=addDays(vnDate(),1),base=process.env.TEST_URL||'http://127.0.0.1:4173';
-let role='admin',rows=[],offerPrice=80000,lastBody,conflict=false,managementRequests=0;
+let role='admin',rows=[],offerPrice=80000,lastBody,conflict=false,managementRequests=0,createRequests=0,holdCreation=false,releaseCreation;
 const settings={studio_version:2,id:1,shop_name:'TiCaBeBe',open_time:'09:00',close_time:'20:00',duration_minutes:45,buffer_minutes:15,booking_days:30,closed_days:[]};
 const staff=[{id:1,name:'Chị Quản lý',role:'manager',email:'manager@example.com',active:true,bookable:true},{id:2,name:'Anh Thợ',role:'barber',email:'barber@example.com',active:true,bookable:true}];
 const services=[{id:1,name:'Cắt tóc',duration_minutes:45,buffer_minutes:15,active:true},{id:2,name:'Gội đầu',duration_minutes:30,buffer_minutes:15,active:true}];
@@ -27,6 +27,11 @@ await page.route('https://ulhipapekijwwhylsafq.supabase.co/**',async route=>{
  else if(f==='studio_price_save'){offerPrice=d.p_price;lastBody=d;}
  else if(f==='studio_service_save'){lastBody=d;body=3;}
  else if(f==='studio_staff_save'){lastBody=d;body=3;}
+ else if(f==='staff-create'){
+   createRequests++;lastBody=d;
+   if(holdCreation)await new Promise(resolve=>{releaseCreation=resolve;});
+   if(d.email==='existing@example.com'){status=409;body={code:'EMAIL_EXISTS'};}else body={created:true};
+ }
  else if(f==='studio_settings'){lastBody=d;}
  else if(f==='studio_edit'){lastBody=d;const a=rows.find(a=>a.id===d.p_id),delta=Date.parse(d.p_start)-Date.parse(a.starts_at);a.ends_at=new Date(Date.parse(a.ends_at)+delta).toISOString();a.blocked_until=new Date(Date.parse(a.blocked_until)+delta).toISOString();a.starts_at=d.p_start;a.customer_name=d.p_name;a.phone=d.p_phone;a.progress=d.p_progress;if(d.p_cancel)a.status='cancelled';}
  else if(f!=='logout')throw new Error('Unexpected API '+f);
@@ -58,7 +63,18 @@ try{
  assert.equal(managementRequests,initialManagementRequests,'switching tabs must not reload management API');
  assert.equal(await page.evaluate(()=>window.__dialogOpenChanges),0,'dialog/backdrop must never close and reopen on tab switches');
  await page.setViewportSize({width:390,height:844});await page.locator('[data-tab=prices]').click();await page.locator('#studio-price-form [name=staff]').selectOption('2');await page.locator('#studio-price-form [name=price]').fill('95000');await page.getByRole('button',{name:'Lưu giá',exact:true}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_price,95000);
- await page.locator('[data-tab=staff]').click();await page.locator('#studio-staff-form [name=name]').fill('Nhân sự mới');await page.locator('#studio-staff-form [name=email]').fill('new@example.com');await page.locator('#studio-staff-form [name=role]').selectOption('manager');await page.getByRole('button',{name:'Lưu nhân sự'}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_role,'manager');
+ await page.locator('[data-tab=staff]').click();await page.locator('#studio-staff-form [name=name]').fill('Nhân sự mới');await page.locator('#studio-staff-form [name=account_mode]').selectOption('link');assert.equal(await page.locator('#studio-password-field').isVisible(),false);await page.locator('#studio-staff-form [name=email]').fill('new@example.com');await page.locator('#studio-staff-form [name=role]').selectOption('manager');await page.getByRole('button',{name:'Lưu nhân sự'}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_role,'manager');await page.waitForFunction(()=>document.querySelector('#studio-staff-form [name=name]').value==='');
+ // Tạo mới qua Edge Function; password được xóa ngay dù request còn chờ.
+ await screenshot('team-account-form-mobile');
+ await page.locator('#studio-staff-form [name=name]').fill('Tài khoản tự tạo');await page.locator('#studio-staff-form [name=email]').fill('auto@example.com');await page.locator('#studio-staff-form [name=password]').fill('Test-only-password-123');
+ assert.equal(await page.locator('#studio-staff-form').evaluate(f=>f.checkValidity()),true);holdCreation=true;const createRequest=page.waitForRequest(r=>r.url().endsWith('/functions/v1/staff-create'));await page.getByRole('button',{name:'Lưu nhân sự'}).click();await createRequest;
+ await page.waitForFunction(()=>document.querySelector('#studio-staff-form [name=password]').value==='');
+ assert.equal(lastBody.password,'Test-only-password-123');assert.equal(lastBody.role,'barber');assert.equal(createRequests,1);const managementRefreshed=page.waitForResponse(r=>r.url().endsWith('/rpc/studio_management'));releaseCreation();holdCreation=false;
+ await managementRefreshed;await page.waitForFunction(()=>document.querySelector('#studio-staff-form [name=name]').value==='');await page.locator('#studio-staff-form [name=name]').waitFor();
+ assert.ok(!(await page.evaluate(()=>JSON.stringify(sessionStorage))).includes('Test-only-password-123'));
+ await page.locator('#studio-staff-form [name=name]').fill('Email đã có');await page.locator('#studio-staff-form [name=email]').fill('existing@example.com');await page.locator('#studio-staff-form [name=password]').fill('Test-only-password-123');await page.getByRole('button',{name:'Lưu nhân sự'}).click();
+ await page.getByText('Email đã có tài khoản. Chọn liên kết tài khoản đã có; mật khẩu cũ được giữ nguyên.').waitFor();assert.equal(await page.locator('#studio-staff-form [name=password]').inputValue(),'');
+ await page.locator('#studio-staff-form [name=password]').fill('Test-only-password-123');await page.locator('#studio-dialog [data-close]').click();await page.locator('#studio-dialog').waitFor({state:'hidden'});assert.equal(await page.locator('#studio-staff-form [name=password]').inputValue(),'');await page.locator('#studio-manage').click();await page.locator('#studio-service-form').waitFor();
  await page.locator('[data-tab=services]').click();await page.locator('#studio-service-form [name=name]').fill('Uốn tóc');await page.locator('#studio-service-form [name=duration]').fill('90');await page.getByRole('button',{name:'Lưu dịch vụ',exact:true}).click();await page.getByText('Đã lưu.',{exact:true}).waitFor();assert.equal(lastBody.p_duration,90);
  for(const width of [320,390,768]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile overflow '+width);assert.ok(await page.locator('#studio-dialog').evaluate(d=>d.scrollWidth<=d.clientWidth),'dialog overflow '+width);}
  await screenshot('team-management-mobile');await page.locator('#studio-dialog [data-close]').click();await page.getByRole('button',{name:'Tháng',exact:true}).click();await page.locator('[data-appointment]').waitFor();await screenshot('team-calendar-mobile');

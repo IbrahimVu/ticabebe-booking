@@ -12,7 +12,7 @@
 
 ## Tài khoản và quyền
 
-Admin tạo tài khoản đăng nhập bằng **Supabase → Authentication → Users → Add user** (email/mật khẩu), rồi trong giao diện **Nhân sự** nhập đúng email để liên kết và cấp vai trò. Không mở đăng ký công khai. Việc tạo/reset mật khẩu vẫn làm trong Supabase; không dùng service-role key trong website. Có thể thêm nhân sự chưa có email để nhận lịch mà chưa có quyền đăng nhập.
+Admin có thể tạo tài khoản email/mật khẩu ngay trong popup **Nhân sự** sau khi triển khai backend theo `docs/ADMIN-ACCOUNTS.md`. Có thể chọn liên kết email đã tồn tại hoặc thêm người nhận lịch chưa cần đăng nhập. Tài khoản cũng vẫn tạo thủ công được trong **Supabase → Authentication → Users → Add user**, rồi liên kết qua popup. Không mở đăng ký công khai; reset mật khẩu vẫn làm trong Supabase. Không dùng service-role key trong website.
 
 | Vai trò | Lịch hẹn | Dịch vụ, giá, giờ mở cửa | Tài khoản, vai trò |
 | --- | --- | --- | --- |

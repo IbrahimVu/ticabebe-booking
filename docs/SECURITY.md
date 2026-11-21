@@ -17,6 +17,8 @@ Người dùng đã chọn **HTTPS/TLS + siết bảo mật**. Đăng nhập dù
 
 ## Cấu hình Supabase đang chạy
 
+Tạo tài khoản qua popup Nhân sự cần Edge Function `staff-create` và migration `20261121_03_admin_account_creation.sql`. Chỉ admin gọi được; function xác minh token với Auth, kiểm tra role tại DB, và trigger kiểm tra lại quyền trong transaction tạo tài khoản. Mật khẩu không được lưu trong bảng ứng dụng hoặc metadata. Secret chỉ đọc từ môi trường Edge, không có trong frontend. Xem `docs/ADMIN-ACCOUNTS.md`; phần backend chỉ có hiệu lực khi đã deploy và chạy SQL, không tự triển khai khi push Pages.
+
 Ngày 14/11/2026 đã tắt **Allow new users to sign up** và xác minh API Auth trả `disable_signup: true`. Tài khoản admin đã tạo vẫn đăng nhập bình thường. Khách đặt lịch qua anonymous database RPC, không cần tạo tài khoản. Anonymous sign-ins và manual linking vẫn tắt; xác nhận email vẫn bật. Quyền đọc bảng lịch bằng publishable key đã được kiểm tra trả HTTP 401.
 
 ## Phạm vi và giới hạn

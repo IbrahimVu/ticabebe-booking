@@ -4,6 +4,8 @@ import {secureApiUrl,assertSecurePage,assertTopLevel,minimalSession,PRIVATE_FETC
 test('thông tin đăng nhập chỉ được gửi đến đúng Supabase qua HTTPS',()=>{
   const path='/auth/v1/token?grant_type=password';
   assert.equal(secureApiUrl(SUPABASE_ORIGIN,path),SUPABASE_ORIGIN+path);
+  assert.equal(secureApiUrl(SUPABASE_ORIGIN,'/functions/v1/staff-create'),SUPABASE_ORIGIN+'/functions/v1/staff-create');
+  for(const path of ['/functions/v1/unknown','/functions/v1/staff-create?redirect=https://attacker.example','/functions/v1/staff-create/../other'])assert.throws(()=>secureApiUrl(SUPABASE_ORIGIN,path));
   for(const base of ['http://ulhipapekijwwhylsafq.supabase.co','https://attacker.example',SUPABASE_ORIGIN+'@attacker.example',SUPABASE_ORIGIN+'?x=1',SUPABASE_ORIGIN+'/other',SUPABASE_ORIGIN+'#x'])assert.throws(()=>secureApiUrl(base,path));
   for(const path of ['https://attacker.example','//attacker.example','/rest/v1/\\attacker','/auth/v1/../../outside','/auth/v1/token\r\nX-Test: 1'])assert.throws(()=>secureApiUrl(SUPABASE_ORIGIN,path));
 });

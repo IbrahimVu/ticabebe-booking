@@ -5,9 +5,9 @@ export const PRIVATE_FETCH=Object.freeze({cache:'no-store',credentials:'omit',re
 export function secureApiUrl(base,path){
   const url=new URL(base);
   if(url.origin!==SUPABASE_ORIGIN||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw new Error('Địa chỉ máy chủ không hợp lệ. Không gửi thông tin đăng nhập.');
-  if(typeof path!=='string'||!/^\/(auth|rest)\/v1\//.test(path)||/[\r\n\\]/.test(path))throw new Error('Đường dẫn API không hợp lệ.');
+  if(typeof path!=='string'||(!/^\/(auth|rest)\/v1\//.test(path)&&path!=='/functions/v1/staff-create')||/[\r\n\\]/.test(path))throw new Error('Đường dẫn API không hợp lệ.');
   const target=new URL(path,SUPABASE_ORIGIN);
-  if(target.origin!==SUPABASE_ORIGIN||!/^\/(auth|rest)\/v1\//.test(target.pathname))throw new Error('Không được gửi dữ liệu sang máy chủ khác hoặc đường dẫn không hợp lệ.');
+  if(target.origin!==SUPABASE_ORIGIN||(!/^\/(auth|rest)\/v1\//.test(target.pathname)&&target.pathname!=='/functions/v1/staff-create'))throw new Error('Không được gửi dữ liệu sang máy chủ khác hoặc đường dẫn không hợp lệ.');
   return target.href;
 }
 
