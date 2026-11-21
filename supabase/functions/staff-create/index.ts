@@ -47,7 +47,7 @@ export function createStaffHandler({env,fetcher=fetch}){
     const name=typeof input?.name==='string'?input.name.trim():'',email=typeof input?.email==='string'?input.email.trim().toLowerCase():'';
     if(!input||Array.isArray(input)||Object.keys(input).some(k=>!['name','email','password','role','active','bookable'].includes(k))||name.length<2||name.length>80||email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
       ||!['admin','manager','barber'].includes(input.role)||typeof input.active!=='boolean'||typeof input.bookable!=='boolean'||(input.role==='admin'&&!input.active))return reply(400,'INVALID_INPUT');
-    if(typeof input.password!=='string'||input.password.length<12||input.password.length>128)return reply(400,'WEAK_PASSWORD');
+    if(typeof input.password!=='string'||input.password.length<8||input.password.length>128)return reply(400,'WEAK_PASSWORD');
     // Trigger provisions staff+membership in the same DB transaction as Auth user.
     // If role was revoked while waiting, the trigger aborts the account creation.
     let created;

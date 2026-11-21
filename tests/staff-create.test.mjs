@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createStaffHandler} from '../supabase/functions/staff-create/index.ts';
 const origin='https://ulhipapekijwwhylsafq.supabase.co';
-const valid={name:'Thợ mới',email:'new@example.com',password:'Test-only-password-123',role:'barber',active:true,bookable:true};
+const valid={name:'Thợ mới',email:'new@example.com',password:'Test1234',role:'barber',active:true,bookable:true};
 function setup({user=true,role='admin',ready=true,createStatus=200,createBody={id:'new-id'},throwCreate=false}={}){
  const calls=[];
  const handler=createStaffHandler({env:name=>({SUPABASE_URL:origin,SUPABASE_PUBLISHABLE_KEYS:JSON.stringify({default:'public-test'}),SUPABASE_SECRET_KEYS:JSON.stringify({default:'sb_secret_test'})})[name],fetcher:async(url,options)=>{
@@ -38,7 +38,7 @@ test('admin gửi mật khẩu chỉ tới Auth Admin API, trả receipt tối t
  assert.equal(create.options.headers.apikey,'sb_secret_test');assert.equal(create.options.headers.Authorization,undefined);
 });
 test('đầu vào sai hoặc mật khẩu yếu không chạm Auth Admin API',async()=>{
- for(const body of [{...valid,password:'short'},{...valid,email:'bad'},{...valid,role:'owner'},{...valid,role:'admin',active:false},{...valid,actor_id:'forged'},{...valid,password:'x'.repeat(9000)}]){
+ for(const body of [{...valid,password:'Test123'},{...valid,email:'bad'},{...valid,role:'owner'},{...valid,role:'admin',active:false},{...valid,actor_id:'forged'},{...valid,password:'x'.repeat(9000)}]){
    const x=setup(),r=await x.send(body);assert.ok([400,413].includes(r.status));assert.ok(!x.calls.some(c=>c.url.includes('/admin/users')));assert.ok(!(await r.text()).includes(body.password));
  }
 });

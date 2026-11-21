@@ -21,7 +21,7 @@ Config tracked chỉ chứa project ID và chế độ gateway. Không yêu cầ
 
 Chỉ admin thấy tab **Nhân sự**. Khi thêm nhân sự mới, chọn:
 
-- **Tạo tài khoản mới:** nhập tên, email, mật khẩu 12–128 ký tự, vai trò và trạng thái; bấm **Lưu nhân sự**. Email được admin xác nhận tự động; tài khoản có thể đăng nhập bằng email/mật khẩu ngay nếu nhân sự đang hoạt động.
+- **Tạo tài khoản mới:** nhập tên, email, mật khẩu 8–128 ký tự, vai trò và trạng thái; bấm **Lưu nhân sự**. Email được admin xác nhận tự động; tài khoản có thể đăng nhập bằng email/mật khẩu ngay nếu nhân sự đang hoạt động.
 - **Liên kết tài khoản đã có:** nhập email Supabase đã tồn tại; không có ô mật khẩu và không thay mật khẩu cũ.
 - **Chưa cấp tài khoản:** thêm người nhận lịch mà không cấp quyền đăng nhập.
 
