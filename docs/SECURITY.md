@@ -19,6 +19,8 @@ Ngày 14/11/2026 đã tắt **Allow new users to sign up** và xác minh API Aut
 
 ## Phạm vi và giới hạn
 
+Khi áp dụng migration nhân sự `20261121_01_team_services.sql`, quyền đọc/sửa lịch mở rộng cho quản lý toàn tiệm và thợ trên lịch của chính họ, theo lựa chọn của chủ tiệm. `studio_profile` kiểm tra nhân sự còn hoạt động tại mỗi RPC; `studio_edit` và `studio_appointments` lọc/kiểm tra chủ lịch ở database. Chỉ admin được cấp vai trò hoặc liên kết tài khoản. Catalog công khai không chứa email, ID đăng nhập hay thông tin khách. Xem `docs/TEAM-SERVICES.md` để cấu hình và triển khai.
+
 Session token vẫn có thể được JavaScript cùng origin đọc; GitHub Pages thuần tĩnh không cấp cookie HttpOnly cho backend Supabase. CSP và escape giảm nguy cơ XSS, không phải cam kết không thể bị tấn công. Hết hạn khi idle xóa phiên trên tab; không hủy ngay mọi access token đã phát hành ở phía server. Mật khẩu, thiết bị và quyền tài khoản GitHub/Supabase vẫn cần được chủ tài khoản bảo vệ.
 
 `frame-ancestors` và các security header tùy chỉnh không được bảo đảm bằng meta CSP; không tuyên bố đã chống clickjacking hoàn toàn. CAPTCHA/chống spam cho luồng đặt lịch công khai và MFA cho admin cần cấu hình riêng nếu triển khai thêm; chưa được bật bởi mã này.

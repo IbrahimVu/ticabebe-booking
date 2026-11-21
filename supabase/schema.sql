@@ -1,4 +1,5 @@
 -- Chạy một lần trong Supabase > SQL Editor trên dự án mới.
+-- Sau đó chạy migrations/20261121_01_team_services.sql để bật quản lý nhân sự/dịch vụ.
 begin;
 create schema booking_private;
 revoke all on schema booking_private from public,anon,authenticated;

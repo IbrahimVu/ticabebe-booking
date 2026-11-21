@@ -1,6 +1,6 @@
 import {readFile,writeFile} from 'node:fs/promises';
 const root=new URL('../',import.meta.url);
-const files=['app.mjs','booking.mjs','security.mjs','compact.css','config.js','index.html','mobile.css','style.css'].map(name=>[new URL(`public/${name}`,root),new URL(name,root)]);
+const files=['app.mjs','studio.mjs','booking.mjs','security.mjs','compact.css','config.js','index.html','mobile.css','style.css'].map(name=>[new URL(`public/${name}`,root),new URL(name,root)]);
 files.push([new URL('supabase/schema.sql',root),new URL('schema.sql',root)]);
 const check=process.argv.includes('--check');
 for(const [source,destination] of files){

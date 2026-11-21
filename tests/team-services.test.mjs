@@ -1,0 +1,80 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+test('nhiều nhân sự: phân quyền, dịch vụ, giá và giữ dữ liệu khi nâng cấp',async t=>{
+ const db=new PGlite();t.after(()=>db.close());
+ const admin='11111111-1111-1111-1111-111111111111',manager='22222222-2222-2222-2222-222222222222',barber='33333333-3333-3333-3333-333333333333',outsider='44444444-4444-4444-4444-444444444444';
+ await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text);
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
+ await db.exec(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8'));
+ await db.query('insert into auth.users values($1,\'admin@example.com\'),($2,\'manager@example.com\'),($3,\'barber@example.com\'),($4,\'other@example.com\')',[admin,manager,barber,outsider]);
+ await db.query('insert into booking_private.admin_users values($1)',[admin]);
+ const {rows:[{day}]}=await db.query(`select ((now() at time zone 'Asia/Ho_Chi_Minh')::date+1)::text as day`),stamp=t=>`${day}T${t}:00+07:00`;
+ const old=(await db.query("select public.book_appointment('Lịch cũ','0901234567',$1::timestamptz) as r",[stamp('15:00')])).rows[0].r;
+ await db.exec(await readFile(new URL('../supabase/migrations/20261121_01_team_services.sql',import.meta.url),'utf8'));
+ const login=async uid=>{await db.exec('reset role;set role authenticated');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid]);};
+ const rpc=async (name,args=[])=>{const {rows:[r]}=await db.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) as r`,args);return r.r;};
+ const list=()=>db.query('select * from public.studio_appointments($1::date,$1::date+1)',[day]);
+ let mid,bid,sid;
+ await login(admin);
+ await t.test('admin cũ giữ quyền, lịch cũ và giá chưa biết được giữ nguyên',async()=>{
+   assert.equal((await rpc('studio_profile')).role,'admin');const rows=(await list()).rows;assert.equal(rows[0].id,old.id);assert.equal(rows[0].price,null);
+   assert.equal((await rpc('studio_catalog')).enabled,false);
+   await assert.rejects(rpc('studio_activate'),/NO_PRICES/);
+   mid=await rpc('studio_staff_save',[null,'Quản lý','manager@example.com','manager',true,true]);
+   bid=await rpc('studio_staff_save',[null,'Thợ Hai','barber@example.com','barber',true,true]);
+   await assert.rejects(rpc('studio_staff_save',[null,'Trùng email','barber@example.com','barber',true,true]),/ACCOUNT_ALREADY_LINKED/);
+   await assert.rejects(rpc('studio_staff_save',[1,'Admin','admin@example.com','barber',true,true]),/LAST_ADMIN/);
+ });
+ await login(manager);
+ await t.test('quản lý cấu hình dịch vụ, giá; không thể cấp vai trò hay kích hoạt',async()=>{
+   sid=await rpc('studio_service_save',[null,'Gội đầu',30,15,true]);
+   await rpc('studio_price_save',[mid,sid,120000,true]);await rpc('studio_price_save',[bid,sid,80000,true]);
+   await assert.rejects(rpc('studio_staff_save',[bid,'Thợ Hai','barber@example.com','admin',true,true]),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_activate'),/FORBIDDEN/);
+   const data=await rpc('studio_management');assert.ok(data.staff.every(p=>p.email===null));
+ });
+ await login(admin);await rpc('studio_activate');
+ await db.exec("reset role;set role anon;select set_config('request.jwt.claim.sub','',false)");
+ let r1,r2;
+ await t.test('khách chọn cùng dịch vụ, khác người có giá riêng và nhận cùng giờ',async()=>{
+   const cat=await rpc('studio_catalog');assert.equal(cat.enabled,true);assert.deepEqual(cat.offers.map(o=>o.price).sort((a,b)=>a-b),[80000,120000]);
+   r1=await rpc('studio_book',['Khách Một','0901234567',stamp('10:00'),mid,sid,120000]);
+   r2=await rpc('studio_book',['Khách Hai','0907654321',stamp('10:00'),bid,sid,80000]);
+   assert.equal(r1.price,120000);assert.equal(r2.price,80000);assert.equal(Date.parse(r2.ends_at)-Date.parse(r2.starts_at),30*60000);
+   assert.ok(!JSON.stringify(r2).includes('0907654321'));assert.ok(!JSON.stringify(cat).includes('@'));
+   await assert.rejects(rpc('studio_book',['Tên','0901234567',stamp('10:15'),bid,sid,80000]),/SLOT_TAKEN/);
+   await assert.rejects(rpc('studio_book',['Tên','0901234567',stamp('11:00'),bid,sid,1]),/PRICE_CHANGED/);
+   await assert.rejects(rpc('book_appointment',['Tên','0901234567',stamp('11:00')]),/UPGRADE_REQUIRED/);
+   await assert.rejects(list(),/permission denied/);
+   await assert.rejects(db.query('select * from booking_private.staff'),/permission denied/);
+   await assert.rejects(rpc('studio_availability',[day,bid,r2.id]),/NOT_STAFF/);
+ });
+ await login(barber);
+ await t.test('thợ chỉ xem/sửa lịch mình, không đọc hay sửa chéo kể cả biết UUID',async()=>{
+   const rows=(await list()).rows;assert.equal(rows.length,1);assert.equal(rows[0].id,r2.id);
+   await assert.rejects(rpc('studio_edit',[r1.id,'Tên','0901234567',stamp('11:00'),false,'scheduled']),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_availability',[day,mid,r1.id]),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_management'),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_price_save',[bid,sid,1,true]),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_staff_save',[bid,'Thợ Hai','barber@example.com','admin',true,true]),/FORBIDDEN/);
+   await assert.rejects(rpc('studio_edit',[r2.id,'Khách Hai','0907654321',stamp('10:01'),false,'scheduled']),/INVALID_SLOT/);
+   await rpc('studio_edit',[r2.id,'Khách Hai','0907654321',stamp('11:00'),false,'serving']);
+ });
+ await login(manager);
+ await rpc('studio_service_save',[sid,'Gội đầu mới',60,15,true]);await rpc('studio_price_save',[bid,sid,100000,true]);
+ await t.test('thay giá/thời lượng không ghi đè snapshot lịch cũ; quản lý thấy mọi lịch',async()=>{
+   const rows=(await list()).rows;assert.equal(rows.length,3);const a=rows.find(a=>a.id===r2.id);assert.equal(a.price,80000);assert.equal(a.service_name,'Gội đầu');assert.equal(Date.parse(a.ends_at)-Date.parse(a.starts_at),30*60000);
+   await rpc('studio_edit',[r1.id,'Khách Một','0901234567',stamp('10:00'),false,'completed']);
+   await assert.rejects(rpc('studio_edit',[r1.id,'Khách Một','0901234567',stamp('11:00'),false,'completed']),/APPOINTMENT_COMPLETED/);
+ });
+ await login(admin);await rpc('studio_staff_save',[bid,'Thợ Hai','barber@example.com','barber',false,true]);
+ await login(barber);
+ await t.test('khóa nhân sự chặn ngay phiên cũ và ẩn trên bảng đặt lịch',async()=>{
+   await assert.rejects(rpc('studio_profile'),/NOT_STAFF/);await assert.rejects(list(),/NOT_STAFF/);
+   assert.ok(!(await rpc('studio_catalog')).offers.some(o=>o.staff_id===bid));
+ });
+ await login(outsider);await assert.rejects(rpc('studio_profile'),/NOT_STAFF/);
+});

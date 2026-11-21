@@ -113,3 +113,11 @@ summary::-webkit-details-marker { display: none; }
   footer { margin: 0 12px; padding: 12px 0 max(12px,env(safe-area-inset-bottom)); font-size: 9px; }
 }
 @media (min-width: 360px) and (max-width: 650px) { #edit-form > .fields { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.studio-summary{font-size:1rem;font-weight:600;margin:12px 0;color:var(--accent,#925e36)}
+.studio-appointment{width:100%;display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:12px;text-align:left;padding:16px 0;border:0;border-bottom:1px solid #ded8cd;background:transparent;color:inherit;font:inherit;cursor:pointer;min-height:72px}
+.studio-appointment span{min-width:0}.studio-appointment small{display:block;font-size:.875rem;line-height:1.5;overflow-wrap:anywhere}.studio-appointment strong{font-size:1rem}.studio-appointment>span:last-child{font-size:.875rem;align-self:center}
+.studio-check{display:flex;align-items:center;gap:10px;margin:16px 0;font-size:1rem}.studio-check input{width:22px;min-height:22px;flex-shrink:0}
+.studio-tabs{display:flex;flex-wrap:wrap;margin:16px 0;gap:4px}.studio-tabs button{min-height:44px;flex:1;white-space:normal}#studio-manage-content form>.primary{width:100%;margin-top:16px}
+#studio-booking select,#studio-manage-content select,#studio-filter,#studio-edit select{width:100%;min-height:48px;font:inherit;font-size:16px;padding:10px;border:1px solid #c9c3b8;border-radius:8px;background:white;color:#24211e}
+#studio-dialog{width:min(640px,calc(100% - 20px));max-height:90dvh;overflow:auto;padding:20px}#studio-dialog .fields{margin-top:12px}#studio-dialog .field{margin-top:12px}#studio-dialog .notice{margin-top:20px}
+@media(max-width:480px){.studio-appointment{gap:8px;grid-template-columns:48px minmax(0,1fr) 44px}.studio-appointment>span:last-child{font-size:.8rem}#studio-dialog{margin:auto 0 0;width:100%;max-width:100%;border-radius:18px 18px 0 0;max-height:94dvh;padding:16px}#studio-dialog .dialog-actions{position:sticky;bottom:-16px;background:white;padding:12px 0}.studio-tabs button{font-size:.875rem;padding:8px}.admin-top small{font-size:.875rem}}
